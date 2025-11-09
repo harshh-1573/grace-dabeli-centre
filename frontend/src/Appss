@@ -1,0 +1,571 @@
+// // frontend/src/App.js — Final Clean Version
+
+// import React, { useState, useEffect, useMemo, useCallback } from 'react';
+// import { Routes, Route, Link, Navigate, useNavigate, useLocation } from 'react-router-dom';
+// import axios from 'axios';
+
+// // --- Page Components ---
+// import AdminPanel from './AdminPanel';
+// import CustomerApp from './CustomerApp';
+// import LoginPage from './LoginPage';
+// import ProtectedRoute from './ProtectedRoute';
+// import CustomerTrackingPage from './CustomerTrackingPage';
+// import Footer from './Footer';
+// import AboutPage from './AboutPage';
+// import LocationsPage from './LocationsPage';
+// import FeedbackPage from './FeedbackPage';
+// import FeedbackInbox from './FeedbackInbox';
+// import CustomerLoginPage from './CustomerLoginPage';
+// import CustomerRegisterPage from './CustomerRegisterPage';
+// import CustomerOrderHistory from './CustomerOrderHistory';
+// import CustomerProfilePage from './CustomerProfilePage';
+// import ForgotPasswordPage from './ForgotPasswordPage';
+// import ResetPasswordPage from './ResetPasswordPage';
+// import CateringRequestPage from './CateringRequestPage';
+
+// // --- Theme Imports ---
+// import { ThemeProvider, createTheme } from '@mui/material/styles';
+// import getDesignTokens from './theme';
+
+// // --- MUI Components ---
+// import {
+//   AppBar, Toolbar, Typography, Button, Box, IconButton, CircularProgress,
+//   Snackbar, Alert as MuiAlert, CssBaseline
+// } from '@mui/material';
+// import Brightness4Icon from '@mui/icons-material/Brightness4';
+// import Brightness7Icon from '@mui/icons-material/Brightness7';
+// import AccountCircleIcon from '@mui/icons-material/AccountCircle';
+
+// import './App.css';
+
+// const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || 'http://localhost:5001';
+
+// function App() {
+//   const [adminToken, setAdminToken] = useState(localStorage.getItem('admin-token'));
+//   const [customerToken, setCustomerToken] = useState(localStorage.getItem('customer-token'));
+//   const [customerName, setCustomerName] = useState('');
+//   const [loadingUser, setLoadingUser] = useState(false);
+//   const [mode, setMode] = useState(localStorage.getItem('themeMode') || 'light');
+//   const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' });
+
+//   const navigate = useNavigate();
+//   const location = useLocation();
+
+//   const handleSnackbarClose = (_, reason) => {
+//     if (reason === 'clickaway') return;
+//     setSnackbar({ ...snackbar, open: false });
+//   };
+
+//   const showSnackbar = (message, severity = 'success') => {
+//     setSnackbar({ open: true, message, severity });
+//   };
+
+//   const toggleColorMode = () => {
+//     const newMode = mode === 'light' ? 'dark' : 'light';
+//     setMode(newMode);
+//     localStorage.setItem('themeMode', newMode);
+//   };
+
+//   const theme = useMemo(() => createTheme(getDesignTokens(mode)), [mode]);
+//   const isActive = (path) => location.pathname === path;
+
+//   const resetTokens = () => {
+//     localStorage.removeItem('admin-token');
+//     localStorage.removeItem('customer-token');
+//     setAdminToken(null);
+//     setCustomerToken(null);
+//     setCustomerName('');
+//   };
+
+//   const handleAdminLoginSuccess = (token) => {
+//     resetTokens();
+//     localStorage.setItem('admin-token', token);
+//     setAdminToken(token);
+//     showSnackbar('Admin login successful!', 'success');
+//     navigate('/admin');
+//   };
+
+//   const handleAdminLogout = () => {
+//     resetTokens();
+//     showSnackbar('Logged out successfully!', 'info');
+//     navigate('/');
+//   };
+
+//   const handleCustomerLoginSuccess = (token) => {
+//     resetTokens();
+//     localStorage.setItem('customer-token', token);
+//     setCustomerToken(token);
+//     showSnackbar('Customer login successful!', 'success');
+
+//     const state = location.state;
+//     if (state?.from) navigate(state.from, { replace: true });
+//     else navigate('/');
+//   };
+
+//   const handleCustomerLogout = useCallback(() => {
+//     resetTokens();
+//     showSnackbar('Logged out successfully!', 'info');
+//     navigate('/');
+//   }, [navigate]);
+
+//   const fetchCustomerData = useCallback(async () => {
+//     const token = localStorage.getItem('customer-token');
+//     if (!token) {
+//       setCustomerName('');
+//       return;
+//     }
+//     setLoadingUser(true);
+//     try {
+//       const config = { headers: { Authorization: `Bearer ${token}` } };
+//       const apiEndpoint = `${API_BASE_URL}/api/customers/me`;
+//       const res = await axios.get(apiEndpoint, config);
+//       setCustomerName(res.data.name);
+//     } catch (err) {
+//       console.error('Error fetching customer data:', err.response?.data?.msg || err.message);
+//       if (err.response && [401, 404].includes(err.response.status)) {
+//         handleCustomerLogout();
+//       }
+//     } finally {
+//       setLoadingUser(false);
+//     }
+//   }, [handleCustomerLogout]);
+
+//   useEffect(() => {
+//     if (customerToken) fetchCustomerData();
+//   }, [customerToken, fetchCustomerData]);
+
+//   return (
+//     <ThemeProvider theme={theme}>
+//       <CssBaseline />
+//       <Box sx={{ display: 'flex', flexDirection: 'column', minHeight: '100vh', bgcolor: 'background.default' }}>
+//         <Box sx={{ flexGrow: 1 }}>
+//           <AppBar position="static" color="primary" elevation={1}>
+//             <Toolbar sx={{ gap: 1 }}>
+//               <Typography
+//                 variant="h6"
+//                 component={Link}
+//                 to="/"
+//                 sx={{
+//                   flexGrow: 0,
+//                   textDecoration: 'none',
+//                   color: 'inherit',
+//                   fontWeight: 'bold',
+//                   mr: 2
+//                 }}
+//               >
+//                 Grace Dabeli Centre
+//               </Typography>
+
+//               {/* Public Links */}
+//               <Box sx={{ display: 'flex', gap: 0.5, flexShrink: 0 }}>
+//                 <Button component={Link} to="/" color="inherit" sx={{ fontWeight: isActive('/') ? 'bold' : 'normal' }}>Home</Button>
+//                 <Button component={Link} to="/track" color="inherit" sx={{ fontWeight: isActive('/track') ? 'bold' : 'normal' }}>Track Order</Button>
+//                 <Button component={Link} to="/about" color="inherit" sx={{ fontWeight: isActive('/about') ? 'bold' : 'normal' }}>About Us</Button>
+//                 <Button component={Link} to="/locations" color="inherit" sx={{ fontWeight: isActive('/locations') ? 'bold' : 'normal' }}>Locations</Button>
+//                 <Button component={Link} to="/feedback" color="inherit" sx={{ fontWeight: isActive('/feedback') ? 'bold' : 'normal' }}>Feedback</Button>
+//                 <Button component={Link} to="/catering" color="inherit" sx={{ fontWeight: isActive('/catering') ? 'bold' : 'normal' }}>Catering</Button>
+//               </Box>
+
+//               <Box sx={{ flexGrow: 1 }} />
+
+//               <IconButton onClick={toggleColorMode} color="inherit">
+//                 {mode === 'dark' ? <Brightness7Icon /> : <Brightness4Icon />}
+//               </IconButton>
+
+//               {/* Auth Controls */}
+//               {adminToken ? (
+//                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+//                   <Button component={Link} to="/admin" color="inherit">Admin Panel</Button>
+//                   <Button component={Link} to="/admin/feedback" color="inherit">Inbox</Button>
+//                   <Button color="inherit" variant="outlined" onClick={handleAdminLogout} sx={{ borderColor: 'inherit', color: 'inherit' }}>Logout</Button>
+//                 </Box>
+//               ) : customerToken ? (
+//                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+//                   {loadingUser ? (
+//                     <CircularProgress size={20} sx={{ color: 'inherit' }} />
+//                   ) : (
+//                     <Button component={Link} to="/customer/profile" color="inherit" sx={{ textTransform: 'none', px: 0 }}>
+//                       <Typography>Hello, {customerName || 'Customer'}!</Typography>
+//                     </Button>
+//                   )}
+//                   <Button component={Link} to="/customer/orders" color="inherit" startIcon={<AccountCircleIcon />}>My Orders</Button>
+//                   <Button color="inherit" variant="outlined" onClick={handleCustomerLogout} sx={{ borderColor: 'inherit', color: 'inherit' }}>Logout</Button>
+//                 </Box>
+//               ) : (
+//                 <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+//                   <Button component={Link} to="/customer/login" color="inherit" variant="outlined" sx={{ borderColor: 'inherit', color: 'inherit' }}>Customer Login</Button>
+//                   <Button component={Link} to="/customer/register" color="inherit">Register</Button>
+//                   <Button component={Link} to="/admin/login" color="inherit">Admin Login</Button>
+//                 </Box>
+//               )}
+//             </Toolbar>
+//           </AppBar>
+
+//           {/* --- ROUTES --- */}
+//           <Box sx={{ flexGrow: 1 }}>
+//             <Routes>
+//               {/* Public Routes */}
+//               <Route path="/" element={<CustomerApp customerToken={customerToken} customerName={customerName} showSnackbar={showSnackbar} />} />
+//               <Route path="/track" element={<CustomerTrackingPage />} />
+//               <Route path="/about" element={<AboutPage />} />
+//               <Route path="/locations" element={<LocationsPage />} />
+//               <Route path="/feedback" element={<FeedbackPage showSnackbar={showSnackbar} />} />
+//               <Route
+//                 path="/catering"
+//                 element={
+//                   <ProtectedRoute token={customerToken} loginPath="/customer/login">
+//                     <CateringRequestPage customerToken={customerToken} customerName={customerName} showSnackbar={showSnackbar} />
+//                   </ProtectedRoute>
+//                 }
+//               />
+
+//               {/* Customer Auth */}
+//               <Route path="/customer/login" element={<CustomerLoginPage onLoginSuccess={handleCustomerLoginSuccess} />} />
+//               <Route path="/customer/register" element={<CustomerRegisterPage onLoginSuccess={handleCustomerLoginSuccess} />} />
+//               <Route
+//                 path="/customer/orders"
+//                 element={
+//                   <ProtectedRoute token={customerToken} loginPath="/customer/login">
+//                     <CustomerOrderHistory customerToken={customerToken} customerName={customerName} showSnackbar={showSnackbar} />
+//                   </ProtectedRoute>
+//                 }
+//               />
+
+//               {/* Profile */}
+//               <Route
+//                 path="/customer/profile"
+//                 element={
+//                   <ProtectedRoute token={customerToken} loginPath="/customer/login">
+//                     <CustomerProfilePage
+//                       customerToken={customerToken}
+//                       showSnackbar={showSnackbar}
+//                       onProfileUpdate={fetchCustomerData}
+//                     />
+//                   </ProtectedRoute>
+//                 }
+//               />
+
+//               {/* Password Reset */}
+//               <Route path="/forgot-password" element={<ForgotPasswordPage showSnackbar={showSnackbar} />} />
+//               <Route path="/customer/reset-password" element={<ResetPasswordPage showSnackbar={showSnackbar} />} />
+
+//               {/* Admin Auth */}
+//               <Route path="/admin/login" element={<LoginPage onLoginSuccess={handleAdminLoginSuccess} />} />
+
+//               {/* Admin Protected */}
+//               <Route
+//                 path="/admin"
+//                 element={<ProtectedRoute token={adminToken} loginPath="/admin/login"><AdminPanel showSnackbar={showSnackbar} /></ProtectedRoute>}
+//               />
+//               <Route
+//                 path="/admin/feedback"
+//                 element={<ProtectedRoute token={adminToken} loginPath="/admin/login"><FeedbackInbox showSnackbar={showSnackbar} /></ProtectedRoute>}
+//               />
+
+//               {/* Fallback */}
+//               <Route path="*" element={<Navigate to="/" replace />} />
+//             </Routes>
+//           </Box>
+//         </Box>
+
+//         {/* Snackbar */}
+//         <Snackbar
+//           open={snackbar.open}
+//           autoHideDuration={4000}
+//           onClose={handleSnackbarClose}
+//           anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
+//         >
+//           <MuiAlert onClose={handleSnackbarClose} severity={snackbar.severity} variant="filled" sx={{ width: '100%' }}>
+//             {snackbar.message}
+//           </MuiAlert>
+//         </Snackbar>
+
+//         <Footer />
+//       </Box>
+//     </ThemeProvider>
+//   );
+// }
+
+// export default App;
+
+// frontend/src/App.js (Final Layout & Scroll Fix)
+
+import React, { useState, useEffect, useMemo, useCallback } from 'react'; 
+import { Routes, Route, Link, Navigate, useNavigate, useLocation } from 'react-router-dom';
+import axios from 'axios';
+
+// --- Page Components ---
+import AdminPanel from './AdminPanel';
+import CustomerApp from './CustomerApp';
+import LoginPage from './LoginPage';
+import ProtectedRoute from './ProtectedRoute';
+import CustomerTrackingPage from './CustomerTrackingPage';
+import Footer from './Footer';
+import AboutPage from './AboutPage';
+import LocationsPage from './LocationsPage';
+import FeedbackPage from './FeedbackPage'; 
+import FeedbackInbox from './FeedbackInbox';
+import CustomerLoginPage from './CustomerLoginPage';
+import CustomerRegisterPage from './CustomerRegisterPage';
+import CustomerOrderHistory from './CustomerOrderHistory';
+import CustomerProfilePage from './CustomerProfilePage'; 
+import ForgotPasswordPage from './ForgotPasswordPage';
+import ResetPasswordPage from './ResetPasswordPage';
+import CateringRequestPage from './CateringRequestPage'; 
+
+// --- Theme Imports ---
+import { ThemeProvider, createTheme } from '@mui/material/styles';
+import getDesignTokens from './theme';
+
+// --- MUI Components ---
+import {
+  AppBar, Toolbar, Typography, Button, Box, IconButton, CircularProgress,
+  Snackbar, Alert as MuiAlert, CssBaseline
+} from '@mui/material';
+import Brightness4Icon from '@mui/icons-material/Brightness4';
+import Brightness7Icon from '@mui/icons-material/Brightness7';
+import AccountCircleIcon from '@mui/icons-material/AccountCircle';
+
+import './App.css';
+
+// Define API Base URL once
+const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || 'http://localhost:5001';
+
+function App() {
+  const [adminToken, setAdminToken] = useState(localStorage.getItem('admin-token'));
+  const [customerToken, setCustomerToken] = useState(localStorage.getItem('customer-token'));
+  const [customerName, setCustomerName] = useState('');
+  const [loadingUser, setLoadingUser] = useState(false);
+  const [mode, setMode] = useState(localStorage.getItem('themeMode') || 'light');
+  const [snackbar, setSnackbar] = useState({ open: false, message: '', severity: 'success' });
+
+  const navigate = useNavigate();
+  const location = useLocation();
+
+  const handleSnackbarClose = (_, reason) => {
+    if (reason === 'clickaway') return;
+    setSnackbar({ ...snackbar, open: false });
+  };
+
+  const showSnackbar = (message, severity = 'success') => {
+    setSnackbar({ open: true, message, severity });
+  };
+
+  const toggleColorMode = () => {
+    const newMode = mode === 'light' ? 'dark' : 'light';
+    setMode(newMode);
+    localStorage.setItem('themeMode', newMode);
+  };
+
+  const theme = useMemo(() => createTheme(getDesignTokens(mode)), [mode]);
+  const isActive = (path) => location.pathname === path;
+
+  const resetTokens = () => {
+    localStorage.removeItem('admin-token');
+    localStorage.removeItem('customer-token');
+    setAdminToken(null);
+    setCustomerToken(null);
+    setCustomerName('');
+  };
+
+  const handleAdminLoginSuccess = (token) => {
+    resetTokens();
+    localStorage.setItem('admin-token', token);
+    setAdminToken(token);
+    showSnackbar('Admin login successful!', 'success');
+    navigate('/admin');
+  };
+
+  const handleAdminLogout = () => {
+    resetTokens();
+    showSnackbar('Logged out successfully!', 'info');
+    navigate('/');
+  };
+
+  const handleCustomerLoginSuccess = (token) => {
+    resetTokens();
+    localStorage.setItem('customer-token', token);
+    setCustomerToken(token);
+    showSnackbar('Customer login successful!', 'success');
+
+    const state = location.state;
+    if (state?.from) navigate(state.from, { replace: true });
+    else navigate('/');
+  };
+
+  const handleCustomerLogout = useCallback(() => {
+    resetTokens();
+    showSnackbar('Logged out successfully!', 'info');
+    navigate('/');
+  }, [navigate]);
+
+  const fetchCustomerData = useCallback(async () => {
+    const token = localStorage.getItem('customer-token');
+    if (!token) {
+      setCustomerName('');
+      return;
+    }
+    setLoadingUser(true);
+    try {
+      const config = { headers: { Authorization: `Bearer ${token}` } };
+      const apiEndpoint = `${API_BASE_URL}/api/customers/me`;
+      const res = await axios.get(apiEndpoint, config);
+      setCustomerName(res.data.name);
+    } catch (err) {
+      console.error('Error fetching customer data:', err.response?.data?.msg || err.message);
+      if (err.response && [401, 404].includes(err.response.status)) {
+        handleCustomerLogout();
+      }
+    } finally {
+      setLoadingUser(false);
+    }
+  }, [handleCustomerLogout]);
+
+  useEffect(() => {
+    if (customerToken) fetchCustomerData();
+  }, [customerToken, fetchCustomerData]);
+
+  return (
+    <ThemeProvider theme={theme}>
+      <CssBaseline />
+      <Box sx={{ display: 'flex', flexDirection: 'column', minHeight: '100vh', bgcolor: 'background.default' }}>
+        <Box sx={{ flexGrow: 1 }}>
+          <AppBar position="sticky" color="primary" elevation={1} sx={{ top: 0, zIndex: 1100 }}>
+            <Toolbar sx={{ gap: 1, flexWrap: 'wrap' }}>
+              <Typography
+                variant="h6"
+                component={Link}
+                to="/"
+                sx={{
+                  flexGrow: 0,
+                  textDecoration: 'none',
+                  color: 'inherit',
+                  fontWeight: 'bold',
+                  mr: 2
+                }}
+              >
+                Grace Dabeli Centre
+              </Typography>
+
+              <Box sx={{ display: 'flex', gap: 0.5, flexWrap: 'wrap' }}>
+                <Button component={Link} to="/" color="inherit" sx={{ fontWeight: isActive('/') ? 'bold' : 'normal' }}>Home</Button>
+                <Button component={Link} to="/track" color="inherit" sx={{ fontWeight: isActive('/track') ? 'bold' : 'normal' }}>Track Order</Button>
+                <Button component={Link} to="/about" color="inherit" sx={{ fontWeight: isActive('/about') ? 'bold' : 'normal' }}>About Us</Button>
+                <Button component={Link} to="/locations" color="inherit" sx={{ fontWeight: isActive('/locations') ? 'bold' : 'normal' }}>Locations</Button>
+                <Button component={Link} to="/feedback" color="inherit" sx={{ fontWeight: isActive('/feedback') ? 'bold' : 'normal' }}>Feedback</Button>
+                <Button component={Link} to="/catering" color="inherit" sx={{ fontWeight: isActive('/catering') ? 'bold' : 'normal' }}>Catering</Button>
+              </Box>
+
+              <Box sx={{ flexGrow: 1 }} />
+
+              <IconButton onClick={toggleColorMode} color="inherit">
+                {mode === 'dark' ? <Brightness7Icon /> : <Brightness4Icon />}
+              </IconButton>
+
+              {adminToken ? (
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                  <Button component={Link} to="/admin" color="inherit">Admin Panel</Button>
+                  <Button component={Link} to="/admin/feedback" color="inherit">Inbox</Button>
+                  <Button color="inherit" variant="outlined" onClick={handleAdminLogout} sx={{ borderColor: 'inherit', color: 'inherit' }}>Logout</Button>
+                </Box>
+              ) : customerToken ? (
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1.5 }}>
+                  {loadingUser ? (
+                    <CircularProgress size={20} sx={{ color: 'inherit' }} />
+                  ) : (
+                    <Button component={Link} to="/customer/profile" color="inherit" sx={{ textTransform: 'none', px: 0 }}>
+                      <Typography>Hello, {customerName || 'Customer'}!</Typography>
+                    </Button>
+                  )}
+                  <Button component={Link} to="/customer/orders" color="inherit" startIcon={<AccountCircleIcon />}>My Orders</Button>
+                  <Button color="inherit" variant="outlined" onClick={handleCustomerLogout} sx={{ borderColor: 'inherit', color: 'inherit' }}>Logout</Button>
+                </Box>
+              ) : (
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                  <Button component={Link} to="/customer/login" color="inherit" variant="outlined" sx={{ borderColor: 'inherit', color: 'inherit' }}>Customer Login</Button>
+                  <Button component={Link} to="/customer/register" color="inherit">Register</Button>
+                  <Button component={Link} to="/admin/login" color="inherit">Admin Login</Button>
+                </Box>
+              )}
+            </Toolbar>
+          </AppBar>
+
+          {/* Routes */}
+          <Box sx={{ flexGrow: 1 }}>
+            <Routes>
+              <Route path="/" element={<CustomerApp customerToken={customerToken} customerName={customerName} showSnackbar={showSnackbar} />} />
+              <Route path="/track" element={<CustomerTrackingPage />} />
+              <Route path="/about" element={<AboutPage />} />
+              <Route path="/locations" element={<LocationsPage />} />
+              <Route path="/feedback" element={<FeedbackPage showSnackbar={showSnackbar} />} />
+              <Route
+                path="/catering"
+                element={
+                  <ProtectedRoute token={customerToken} loginPath="/customer/login">
+                    <CateringRequestPage customerToken={customerToken} customerName={customerName} showSnackbar={showSnackbar} />
+                  </ProtectedRoute>
+                }
+              />
+
+              <Route path="/customer/login" element={<CustomerLoginPage onLoginSuccess={handleCustomerLoginSuccess} />} />
+              <Route path="/customer/register" element={<CustomerRegisterPage onLoginSuccess={handleCustomerLoginSuccess} />} />
+              <Route
+                path="/customer/orders"
+                element={
+                  <ProtectedRoute token={customerToken} loginPath="/customer/login">
+                    <CustomerOrderHistory customerToken={customerToken} customerName={customerName} showSnackbar={showSnackbar} />
+                  </ProtectedRoute>
+                }
+              />
+
+              <Route
+                path="/customer/profile"
+                element={
+                  <ProtectedRoute token={customerToken} loginPath="/customer/login">
+                    <CustomerProfilePage
+                      customerToken={customerToken}
+                      showSnackbar={showSnackbar}
+                      onProfileUpdate={fetchCustomerData}
+                    />
+                  </ProtectedRoute>
+                }
+              />
+
+              <Route path="/forgot-password" element={<ForgotPasswordPage showSnackbar={showSnackbar} />} />
+              <Route path="/customer/reset-password" element={<ResetPasswordPage showSnackbar={showSnackbar} />} />
+
+              <Route path="/admin/login" element={<LoginPage onLoginSuccess={handleAdminLoginSuccess} />} />
+
+              <Route
+                path="/admin"
+                element={<ProtectedRoute token={adminToken} loginPath="/admin/login"><AdminPanel showSnackbar={showSnackbar} /></ProtectedRoute>}
+              />
+              <Route
+                path="/admin/feedback"
+                element={<ProtectedRoute token={adminToken} loginPath="/admin/login"><FeedbackInbox showSnackbar={showSnackbar} /></ProtectedRoute>}
+              />
+
+              <Route path="*" element={<Navigate to="/" replace />} />
+            </Routes>
+          </Box>
+        </Box>
+
+        {/* Snackbar */}
+        <Snackbar
+          open={snackbar.open}
+          autoHideDuration={4000}
+          onClose={handleSnackbarClose}
+          anchorOrigin={{ vertical: 'bottom', horizontal: 'center' }}
+        >
+          <MuiAlert onClose={handleSnackbarClose} severity={snackbar.severity} variant="filled" sx={{ width: '100%' }}>
+            {snackbar.message}
+          </MuiAlert>
+        </Snackbar>
+
+        <Footer />
+      </Box>
+    </ThemeProvider>
+  );
+}
+
+export default App;

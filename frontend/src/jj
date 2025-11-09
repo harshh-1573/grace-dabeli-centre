@@ -1,0 +1,986 @@
+// In frontend/src/CustomerApp.js (FINAL WITH ADDRESS MANAGEMENT)
+
+import React, { useState, useEffect, useMemo, useCallback } from 'react'; // --- UPDATED ---
+import axios from 'axios';
+import { useNavigate, Link as RouterLink } from 'react-router-dom';
+
+// --- UPDATED: Added new MUI imports for the forms and modals ---
+import {
+  Container, Grid, Box, Card, CardContent, CardMedia,
+  Typography, Button, List, ListItem, ListItemText,
+  IconButton, Accordion, AccordionSummary, AccordionDetails, Alert,
+  ListItemAvatar, Avatar, Paper, Tabs, Tab, TextField, Stack,
+  CircularProgress, Dialog, DialogTitle, DialogContent, DialogActions,
+  Checkbox, FormControlLabel, RadioGroup, Radio, FormControl, FormLabel, Divider,
+  InputLabel, Select, MenuItem // --- NEW ---
+} from '@mui/material';
+import AddIcon from '@mui/icons-material/Add';
+import ExpandMoreIcon from '@mui/icons-material/ExpandMore';
+import DeleteIcon from '@mui/icons-material/Delete'; 
+import StarIcon from '@mui/icons-material/Star'; 
+import SearchIcon from '@mui/icons-material/Search'; 
+import EditNoteIcon from '@mui/icons-material/EditNote'; 
+import HomeIcon from '@mui/icons-material/Home'; // --- NEW ---
+import WorkIcon from '@mui/icons-material/Work'; // --- NEW ---
+import LocationOnIcon from '@mui/icons-material/LocationOn'; // --- NEW ---
+
+// Define API Base URL once
+const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || 'http://localhost:5001';
+
+// ===========================================
+// 📦 Customization MODAL Component (Unchanged)
+// ===========================================
+const CustomizeModal = ({ item, open, onClose, onCustomize }) => {
+  // ... (This entire component is unchanged) ...
+  const itemData = item || {};
+  const [selections, setSelections] = useState({});
+  useEffect(() => {
+    if (!itemData.modifiers) return; 
+    const initialSelections = {};
+    itemData.modifiers.forEach((group) => {
+      if (group.selectionType === 'single' && group.options.length > 0) {
+        initialSelections[group.groupName] = group.options[0];
+      } else {
+        initialSelections[group.groupName] = [];
+      }
+    });
+    setSelections(initialSelections);
+  }, [itemData]); 
+  const priceAdjustment = useMemo(() => {
+    if (Object.keys(selections).length === 0) return 0;
+    return Object.values(selections).reduce((total, selection) => {
+      if (Array.isArray(selection)) {
+        return total + selection.reduce((sum, opt) => sum + opt.price, 0);
+      } else if (selection && selection.price !== undefined) {
+        return total + selection.price;
+      }
+      return total;
+    }, 0);
+  }, [selections]);
+  const basePrice = itemData.price || 0;
+  const finalPrice = basePrice + priceAdjustment;
+  const handleSelectionChange = (groupName, option) => {
+    setSelections(prev => {
+      const currentSelection = prev[groupName];
+      const group = itemData.modifiers.find(g => g.groupName === groupName);
+      if (group.selectionType === 'single') {
+        return { ...prev, [groupName]: option };
+      } else {
+        const isSelected = currentSelection.some(o => o.name === option.name);
+        if (isSelected) {
+          return { ...prev, [groupName]: currentSelection.filter(o => o.name !== option.name) };
+        } else {
+          return { ...prev, [groupName]: [...currentSelection, option] };
+        }
+      }
+    });
+  };
+  const handleConfirm = () => {
+    const customizationDetails = Object.keys(selections).map(groupName => {
+        const selection = selections[groupName];
+        if (Array.isArray(selection)) {
+          return { groupName, selectedOptions: selection };
+        } else if (selection) {
+          return { groupName, selectedOptions: [selection] };
+        }
+        return { groupName, selectedOptions: [] };
+    }).filter(d => d.selectedOptions.length > 0);
+    onCustomize({
+        ...item,
+        price: finalPrice,
+        customization: customizationDetails, 
+    });
+  };
+  return (
+    <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth>
+      <DialogTitle>Customize {itemData.name || 'Menu Item'}</DialogTitle>
+      <DialogContent dividers sx={{ minHeight: 400 }}>
+        <Stack spacing={3}>
+          <Box display="flex" justifyContent="space-between" alignItems="center">
+            <Typography variant="h5">Base Price: ₹{basePrice.toFixed(2)}</Typography>
+            <Typography variant="h5" color="primary">Total: ₹{finalPrice.toFixed(2)}</Typography>
+          </Box>
+          <Divider />
+          {itemData.modifiers && itemData.modifiers.map((group) => (
+            <FormControl component="fieldset" key={group.groupName}>
+              <FormLabel component="legend" sx={{ fontSize: '1.1rem', fontWeight: 'bold' }}>
+                {group.groupName}
+                {group.selectionType === 'single' && (
+                    <Typography variant="caption" color="text.secondary" sx={{ ml: 1 }}>(Select one)</Typography>
+                )}
+                {group.selectionType === 'multiple' && (
+                    <Typography variant="caption" color="text.secondary" sx={{ ml: 1 }}>(Select any number)</Typography>
+                )}
+              </FormLabel>
+              <Box sx={{ p: 1, border: '1px solid #eee', borderRadius: 1, mt: 1 }}>
+              {group.selectionType === 'single' ? (
+                <RadioGroup
+                  value={selections[group.groupName]?.name || ''}
+                  onChange={(e) => {
+                    const selectedOption = group.options.find(o => o.name === e.target.value);
+                    handleSelectionChange(group.groupName, selectedOption);
+                  }}
+                >
+                  {group.options.map((option) => (
+                    <FormControlLabel
+                      key={option.name}
+                      value={option.name}
+                      control={<Radio size="small" />}
+                      label={`${option.name} (+₹${option.price.toFixed(2)})`}
+                    />
+                  ))}
+                </RadioGroup>
+              ) : (
+                <Grid container>
+                {group.options.map((option) => (
+                    <Grid item xs={12} sm={6} key={option.name}>
+                      <FormControlLabel
+                        control={
+                          <Checkbox 
+                            checked={selections[group.groupName]?.some(o => o.name === option.name) || false}
+                            onChange={() => handleSelectionChange(group.groupName, option)}
+                            size="small"
+                          />
+                        }
+                        label={`${option.name} (+₹${option.price.toFixed(2)})`}
+                      />
+                    </Grid>
+                ))}
+                </Grid>
+              )}
+              </Box>
+            </FormControl>
+          ))}
+        </Stack>
+      </DialogContent>
+      <DialogActions>
+        <Button onClick={onClose}>Cancel</Button>
+        <Button onClick={handleConfirm} variant="contained" color="success">
+          Add to Order (₹{finalPrice.toFixed(2)})
+        </Button>
+      </DialogActions>
+    </Dialog>
+  );
+};
+// ===========================================
+
+// ===========================================
+// --- 🏠 NEW: Reusable Address Form Component ---
+// ===========================================
+// This is the form we used in CustomerProfilePage.js
+// We've moved it here to reuse it in the checkout modal.
+const AddressForm = ({ onAddressAdded, customerToken, showSnackbar }) => {
+  const [addressType, setAddressType] = useState('Home');
+  const [street, setStreet] = useState('');
+  const [city, setCity] = useState('');
+  const [pincode, setPincode] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+
+  const handleAddAddress = async (e) => {
+    e.preventDefault();
+    setError('');
+    
+    if (!street || !city || !pincode) {
+      setError("Please fill in all required fields.");
+      return;
+    }
+    
+    setLoading(true);
+    try {
+      const config = { headers: { 'Authorization': `Bearer ${customerToken}` } };
+      const body = { addressType, street, city, pincode };
+      const res = await axios.post(`${API_BASE_URL}/api/customers/me/addresses`, body, config);
+      
+      showSnackbar("New address saved!", "success");
+      setStreet('');
+      setCity('');
+      setPincode('');
+      setAddressType('Home');
+      
+      // Pass the new address (res.data) back up to the parent modal
+      onAddressAdded(res.data);
+      
+    } catch (err) {
+      console.error("Error adding address:", err.response);
+      setError(err.response?.data?.Error || err.response?.data || "Could not save address.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <Box component="form" onSubmit={handleAddAddress} sx={{ mt: 2, p: 2, border: '1px solid #ddd', borderRadius: 1 }}>
+      <Typography variant="h6" gutterBottom>Add New Address</Typography>
+      <Grid container spacing={2}>
+        <Grid item xs={12} sm={6}>
+          <FormControl fullWidth size="small">
+            <InputLabel>Address Type</InputLabel>
+            <Select
+              value={addressType}
+              label="Address Type"
+              onChange={(e) => setAddressType(e.target.value)}
+            >
+              <MenuItem value="Home">Home</MenuItem>
+              <MenuItem value="Work">Work</MenuItem>
+              <MenuItem value="Other">Other</MenuItem>
+            </Select>
+          </FormControl>
+        </Grid>
+        <Grid item xs={12} sm={6}>
+          <TextField
+            label="Street Address"
+            fullWidth
+            required
+            size="small"
+            value={street}
+            onChange={(e) => setStreet(e.target.value)}
+          />
+        </Grid>
+        <Grid item xs={12} sm={6}>
+          <TextField
+            label="City"
+            fullWidth
+            required
+            size="small"
+            value={city}
+            onChange={(e) => setCity(e.target.value)}
+          />
+        </Grid>
+        <Grid item xs={12} sm={6}>
+          <TextField
+            label="Pincode"
+            fullWidth
+            required
+            size="small"
+            value={pincode}
+            onChange={(e) => setPincode(e.target.value)}
+          />
+        </Grid>
+        {error && (
+          <Grid item xs={12}>
+            <Alert severity="error" variant="outlined">{error}</Alert>
+          </Grid>
+        )}
+        <Grid item xs={12}>
+          <Button 
+            type="submit" 
+            variant="contained" 
+            color="success" 
+            fullWidth 
+            disabled={loading}
+            startIcon={<AddIcon />}
+          >
+            {loading ? <CircularProgress size={24} /> : 'Save New Address'}
+          </Button>
+        </Grid>
+      </Grid>
+    </Box>
+  );
+};
+
+// ===========================================
+// ===========================================
+// --- 🚚 UPDATED: Address Selection Modal ---
+// ===========================================
+const AddressModal = ({ open, onClose, onSubmitOrder, customerToken, showSnackbar }) => {
+  const [addresses, setAddresses] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [selectedAddressId, setSelectedAddressId] = useState('');
+  const [showAddForm, setShowAddForm] = useState(false);
+  
+  // --- NEW: State for Order Type ---
+  const [orderType, setOrderType] = useState('Delivery'); // Default to Delivery
+  
+  const getAuthConfig = useCallback(() => {
+    return { headers: { 'Authorization': `Bearer ${customerToken}` } };
+  }, [customerToken]);
+
+  // Fetch addresses when modal opens
+  useEffect(() => {
+    if (open) {
+      setLoading(true);
+      setShowAddForm(false); // Reset form
+      setOrderType('Delivery'); // Reset to default
+      
+      axios.get(`${API_BASE_URL}/api/customers/me/addresses`, getAuthConfig())
+        .then(res => {
+          setAddresses(res.data || []);
+          if (res.data && res.data.length > 0) {
+            setSelectedAddressId(res.data[0]._id);
+          } else {
+            setShowAddForm(true); // If no addresses, show form by default
+          }
+        })
+        .catch(err => {
+          console.error("Error fetching addresses:", err);
+          showSnackbar("Could not load addresses.", "error");
+        })
+        .finally(() => setLoading(false));
+    }
+  }, [open, getAuthConfig, showSnackbar]);
+
+  const handleAddressAdded = (newAddress) => {
+    setAddresses(prev => [newAddress, ...prev]); 
+    setSelectedAddressId(newAddress._id); 
+    setShowAddForm(false); 
+  };
+
+  // --- UPDATED: handleSubmit now sends an object with orderType ---
+  const handleSubmit = () => {
+    
+    // If they selected "Pickup", no address is needed.
+    if (orderType === 'Pickup') {
+      onSubmitOrder({
+        orderType: 'Pickup',
+        deliveryAddress: null // Send null for the address
+      });
+      return;
+    }
+    
+    // If they selected "Delivery", we must have an address.
+    if (orderType === 'Delivery') {
+      const selected = addresses.find(a => a._id === selectedAddressId);
+      if (selected) {
+        onSubmitOrder({
+          orderType: 'Delivery',
+          deliveryAddress: selected // Send the full address object
+        });
+      } else {
+        showSnackbar("Please select a delivery address.", "error");
+      }
+    }
+  };
+
+  const getIcon = (type) => {
+    if (type === 'Work') return <WorkIcon fontSize="small" />;
+    if (type === 'Home') return <HomeIcon fontSize="small" />;
+    return <LocationOnIcon fontSize="small" />;
+  };
+
+  return (
+    <Dialog open={open} onClose={onClose} maxWidth="sm" fullWidth>
+      <DialogTitle>Select Order Type</DialogTitle>
+      <DialogContent dividers>
+        
+        {/* --- NEW: Order Type Radio Group --- */}
+        <FormControl component="fieldset" fullWidth sx={{ mb: 2 }}>
+          <RadioGroup
+            row
+            value={orderType}
+            onChange={(e) => setOrderType(e.target.value)}
+          >
+            <FormControlLabel value="Delivery" control={<Radio />} label="Delivery" />
+            <FormControlLabel value="Pickup" control={<Radio />} label="Pickup (In-Store)" />
+          </RadioGroup>
+        </FormControl>
+
+        <Divider sx={{ mb: 2 }} />
+
+        {/* --- UPDATED: Conditional Address Section --- */}
+        {orderType === 'Delivery' ? (
+          <>
+            <Typography variant="h6" gutterBottom>Select Delivery Address</Typography>
+            {loading ? (
+              <Box sx={{ display: 'flex', justifyContent: 'center', my: 3 }}><CircularProgress /></Box>
+            ) : (
+              <FormControl component="fieldset" fullWidth>
+                <RadioGroup
+                  value={selectedAddressId}
+                  onChange={(e) => setSelectedAddressId(e.target.value)}
+                >
+                  <Stack spacing={2}>
+                    {addresses.map(addr => (
+                      <Paper 
+                        key={addr._id} 
+                        variant="outlined"
+                        sx={{ p: 1.5, display: 'flex', alignItems: 'center', gap: 1, 
+                              borderColor: selectedAddressId === addr._id ? 'primary.main' : '#ddd',
+                              borderWidth: 2,
+                              cursor: 'pointer'
+                            }}
+                        onClick={() => setSelectedAddressId(addr._id)} // Make whole paper clickable
+                      >
+                        <Radio value={addr._id} />
+                        <Box>
+                          <Typography variant="body1" sx={{ fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                            {getIcon(addr.addressType)} {addr.addressType}
+                          </Typography>
+                          <Typography variant="body2" color="text.secondary">
+                            {addr.street}, {addr.city}, {addr.pincode}
+                          </Typography>
+                        </Box>
+                      </Paper>
+                    ))}
+                  </Stack>
+                </RadioGroup>
+              </FormControl>
+            )}
+
+            {/* --- "Add New Address" section --- */}
+            {!loading && (
+              showAddForm ? (
+                <AddressForm 
+                  customerToken={customerToken}
+                  showSnackbar={showSnackbar}
+                  onAddressAdded={handleAddressAdded}
+                />
+              ) : (
+                <Button 
+                  onClick={() => setShowAddForm(true)} 
+                  startIcon={<AddIcon />} 
+                  fullWidth 
+                  variant="outlined" 
+                  sx={{ mt: 2 }}
+                >
+                  Add New Address
+                </Button>
+              )
+            )}
+          </>
+        ) : (
+          // --- NEW: Show this message if "Pickup" is selected ---
+          <Alert severity="info" sx={{ mt: 2 }}>
+            Your order will be prepared for in-store pickup. You will not be charged a delivery fee.
+          </Alert>
+        )}
+      </DialogContent>
+      <DialogActions>
+        <Button onClick={onClose}>Cancel</Button>
+        <Button 
+          onClick={handleSubmit} 
+          variant="contained" 
+          color="success"
+          // --- UPDATED: Disable button only if Delivery is selected BUT no address is
+          disabled={loading || (orderType === 'Delivery' && !selectedAddressId)} 
+        >
+          Confirm & Place Order
+        </Button>
+      </DialogActions>
+    </Dialog>
+  );
+};
+// ===========================================
+// ===========================================
+
+
+// ===========================================
+// 🍔 CustomerApp MAIN Component
+// ===========================================
+function CustomerApp({ customerToken, customerName, showSnackbar }) {
+  // State
+  const [menu, setMenu] = useState([]);
+  const [cart, setCart] = useState([]);
+  const [featuredItems, setFeaturedItems] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const navigate = useNavigate();
+
+  // Customization Modal State
+  const [customizationModalOpen, setCustomizationModalOpen] = useState(false);
+  const [itemToCustomize, setItemToCustomize] = useState(null);
+  
+  // Note Modal State
+  const [noteModalOpen, setNoteModalOpen] = useState(false);
+  const [currentItemForNote, setCurrentItemForNote] = useState(null);
+  const [currentNoteText, setCurrentNoteText] = useState("");
+
+  // --- NEW: Address Modal State ---
+  const [isAddressModalOpen, setIsAddressModalOpen] = useState(false);
+  
+  // --- UPDATED: Auth Config helper ---
+  const getAuthConfig = useCallback(() => {
+    return { headers: { 'Authorization': `Bearer ${customerToken}` } };
+  }, [customerToken]);
+
+  // --- Filter State (Unchanged) ---
+  const [categories, setCategories] = useState(['All']);
+  const [selectedCategory, setSelectedCategory] = useState('All');
+  const [searchTerm, setSearchTerm] = useState('');
+
+  // --- Fetching Logic (Unchanged) ---
+  const fetchMenu = () => {
+    setLoading(true);
+    const params = {};
+    if (selectedCategory !== 'All') params.category = selectedCategory;
+    if (searchTerm.trim() !== '') params.search = searchTerm;
+    axios.get(`${API_BASE_URL}/api/menu/`, { params }) 
+      .then((res) => setMenu(res.data))
+      .catch((err) => console.log("Error fetching menu:", err));
+      // .finally(() => setLoading(false)); // This line was causing a double-fetch issue
+   };
+   const fetchCategories = () => {
+    axios.get(`${API_BASE_URL}/api/menu/categories`)
+      .then((res) => setCategories(res.data))
+      .catch((err) => console.error("Error fetching categories:", err));
+   };
+   const fetchFeaturedItems = () => {
+    axios.get(`${API_BASE_URL}/api/menu/featured`)
+      .then((res) => setFeaturedItems(res.data))
+      .catch((err) => console.error("Error fetching featured items:", err));
+   };
+
+  // --- Effects (Unchanged) ---
+  useEffect(() => {
+    fetchCategories(); 
+    fetchFeaturedItems();
+  }, []); 
+
+  useEffect(() => {
+    const handler = setTimeout(() => {
+      fetchMenu();
+    }, 300); 
+    return () => {
+      clearTimeout(handler); 
+    };
+  }, [selectedCategory, searchTerm]); 
+  
+  // --- UPDATED: A bug fix in fetchMenu. Removed setLoading(false) ---
+  // We need to set loading to false *after* all data (menu) is loaded
+  useEffect(() => {
+    if (menu.length > 0 || searchTerm || selectedCategory !== 'All') {
+      setLoading(false);
+    }
+  }, [menu, searchTerm, selectedCategory]);
+  // --- END BUG FIX ---
+
+
+  // --- Cart Logic (Unchanged) ---
+  const addSimpleItemToCart = (itemToAdd) => {
+    if (itemToAdd.modifiers && itemToAdd.modifiers.length > 0) {
+        setItemToCustomize(itemToAdd);
+        setCustomizationModalOpen(true);
+        return; 
+    }
+    setCart((prevCart) => {
+        const existingItemIndex = prevCart.findIndex((item) => item._id === itemToAdd._id && !item.customization);
+        if (existingItemIndex > -1) {
+            return prevCart.map((item, index) =>
+                index === existingItemIndex ? { ...item, quantity: item.quantity + 1 } : item
+            );
+        } else {
+            return [...prevCart, { ...itemToAdd, quantity: 1, note: '' }];
+        }
+    });
+    showSnackbar(`${itemToAdd.name} added to cart!`, 'success');
+  };
+  const handleItemCustomized = (customizedItem) => {
+    setCart((prevCart) => {
+      return [...prevCart, { 
+        ...customizedItem, 
+        cartId: Date.now() + Math.random(), 
+        quantity: 1, 
+        note: '', 
+      }];
+    });
+    setCustomizationModalOpen(false);
+    showSnackbar(`${customizedItem.name} added to cart!`, 'success');
+  };
+  const handleQuantityChange = (itemId, change) => {
+     setCart((prevCart) => {
+       return prevCart.map((item) => {
+        const idToCheck = item.cartId || item._id;
+        if (idToCheck === itemId) {
+           const newQuantity = item.quantity + change;
+           return newQuantity > 0 ? { ...item, quantity: newQuantity } : null; 
+         }
+         return item;
+       }).filter(item => item !== null); 
+     });
+  };
+  const handleRemoveItem = (itemId) => {
+    setCart((prevCart) => prevCart.filter((item) => (item.cartId || item._id) !== itemId));
+  };
+  // --- END CART LOGIC ---
+
+  // --- Note Modal Handlers (Unchanged) ---
+  const openNoteModal = (item) => {
+    setCurrentItemForNote(item);
+    setCurrentNoteText(item.note || ''); 
+    setNoteModalOpen(true);
+  };
+  const closeNoteModal = () => {
+    setNoteModalOpen(false);
+    setCurrentItemForNote(null);
+    setCurrentNoteText("");
+  };
+  const handleSaveNote = () => {
+    setCart(prevCart => 
+      prevCart.map(item => 
+        (item.cartId || item._id) === (currentItemForNote.cartId || currentItemForNote._id)
+          ? { ...item, note: currentNoteText } 
+          : item
+      )
+    );
+    showSnackbar(`Note saved for ${currentItemForNote.name}`, 'success');
+    closeNoteModal();
+  };
+  // --- END NOTE HANDLERS ---
+
+  // Calculate Total Price (Unchanged)
+  const getTotalPrice = () => { return cart.reduce((total, item) => total + (item.price * item.quantity), 0); };
+
+  // Group Menu By Categories (Unchanged)
+  const menuByCategories = menu.reduce((acc, item) => {
+    const { category } = item;
+    if (!acc[category]) { acc[category] = []; }
+    acc[category].push(item);
+    return acc;
+   }, {});
+
+  // --- UPDATED: Order Submission Logic is now TWO functions ---
+
+  // 1. This function is called by the "Place Order" button in the cart.
+  // It just opens the address modal.
+  const handleSubmitOrder = (e) => {
+    e.preventDefault();
+    if (!customerToken) {
+      navigate('/customer/login', { state: { from: 'checkout' } });
+      return;
+    }
+    if (cart.length === 0) {
+      showSnackbar("Your cart is empty!", "warning");
+      return;
+    }
+    // --- THIS IS THE CHANGE ---
+    // Instead of submitting, just open the address modal.
+    setIsAddressModalOpen(true);
+  };
+
+  // 2. This function is called by the Address Modal *after* an address is selected.
+  // This is your OLD handleSubmitOrder function, renamed and updated.
+  // 2. This function is called by the Address Modal *after* an address is selected.
+  // --- UPDATED: Now receives an 'orderData' object ---
+  const handleFinalizeOrder = (orderData) => {
+    
+    // 1. Create the NEW secure payload
+    const newOrder = {
+      // --- NEW: Add the orderType ---
+      orderType: orderData.orderType,
+
+      // --- UPDATED: Conditionally add the address ---
+      deliveryAddress: orderData.orderType === 'Delivery' ? {
+        street: orderData.deliveryAddress.street,
+        city: orderData.deliveryAddress.city,
+        pincode: orderData.deliveryAddress.pincode,
+      } : undefined, // Send 'undefined' if it's a Pickup order
+      
+      // This items logic is unchanged
+      items: cart.map(item => {
+        const selectedModifiers = (item.customization || []).flatMap(group => 
+          group.selectedOptions.map(option => ({
+            name: option.name,
+            price: option.price
+          }))
+        );
+        return {
+          menuItemId: item._id, 
+          quantity: item.quantity,
+          note: item.note || '',
+          selectedModifiers: selectedModifiers 
+        };
+      })
+    };
+    
+    const config = getAuthConfig();
+
+    axios.post(`${API_BASE_URL}/api/orders/add`, newOrder, config)
+      .then((res) => {
+        showSnackbar(`Order placed! Your Order ID is ${res.data.orderId}`, "success");
+        setCart([]); 
+        setIsAddressModalOpen(false); 
+      })
+      .catch((err) => {
+        console.error("Order submission error:", err);
+        const errorMsg = err.response?.data?.Error || err.response?.data || "Error placing order";
+        if (err.response && (err.response.status === 401 || err.response.status === 403)) {
+           showSnackbar("Authentication error. Please log in again.", "error");
+        } else {
+           // --- NEW: Show validation errors from the backend ---
+           if (err.response?.data?.includes('Validation Error')) {
+             showSnackbar('Validation Error: Please check your order details.', 'error');
+           } else {
+             showSnackbar(errorMsg, "error");
+           }
+        }
+      });
+  };
+
+  // --- RENDER (Unchanged) ---
+  const handleOpenCustomization = (item) => {
+    if (item.modifiers && item.modifiers.length > 0) {
+      setItemToCustomize(item);
+      setCustomizationModalOpen(true);
+    } else {
+      addSimpleItemToCart(item);
+    }
+  }
+  
+  const getCustomizationSummary = (item) => {
+    if (!item.customization || item.customization.length === 0) return null;
+    const summaries = item.customization.flatMap(group => {
+        return group.selectedOptions.map(option => option.name);
+    });
+    return summaries.join(', ');
+  }
+
+  return (
+    <Container maxWidth="lg" sx={{ mt: 4, mb: 4 }}>
+      
+      {/* Hero Section (Unchanged) */}
+      <Box sx={{ 
+        textAlign: 'center', mb: 5, py: 5, 
+        backgroundColor: 'background.paper', color: 'text.primary', 
+        borderRadius: 2, boxShadow: '0 4px 12px rgba(0,0,0,0.1)' 
+      }}>
+         <Typography variant="h2" component="h1" gutterBottom sx={{fontWeight: 700}}>
+           Welcome to Grace Dabeli & Vadapav center
+         </Typography>
+         <Typography variant="h5" component="h2" color="text.secondary">
+           Fresh, Hot, and Authentic. Place your order below!
+         </Typography>
+      </Box>
+
+      {/* --- FEATURED ITEMS SECTION (Unchanged) --- */}
+      {featuredItems.length > 0 && selectedCategory === 'All' && searchTerm === '' && (
+          <Box sx={{ mb: 5 }}>
+             <Typography variant="h4" gutterBottom sx={{ display: 'flex', alignItems: 'center', borderBottom: '2px solid', borderColor: 'primary.main', pb: 1, color: 'text.primary' }}>
+                 <StarIcon color="primary" sx={{ mr: 1 }} /> Today's Must-Try Specials
+             </Typography>
+             <Grid container spacing={2} sx={{ mt: 1 }}>
+                 {featuredItems.map((item) => (
+                     <Grid item xs={12} sm={6} md={3} key={item._id}>
+                         <Card elevation={2} sx={{ height: '100%', display: 'flex', flexDirection: 'column' }}>
+                             <CardContent sx={{ p: 1.5, pb: '16px !important', textAlign: 'center' }}>
+                                 <Avatar 
+                                     variant="rounded" 
+                                     src={item.imageUrl || '/images/placeholder-food.jpg'} 
+                                     sx={{ width: 80, height: 80, mx: 'auto', mb: 1.5 }}
+                                     alt={item.name}
+                                     onError={(e) => { e.target.src = '/images/placeholder-food.jpg'; }}
+                                 />
+                                 <Typography variant="body1" sx={{ fontWeight: 'bold' }}>{item.name}</Typography>
+                                 <Typography variant="body2" color="text.secondary">Only ₹{item.price}</Typography>
+                             </CardContent>
+                             <Box sx={{ p: 1, textAlign: 'center', borderTop: '1px solid #eee' }}>
+                                 <Button 
+                                     size="small" 
+                                     variant="contained" 
+                                     color="primary" 
+                                     onClick={() => handleOpenCustomization(item)} 
+                                     startIcon={<AddIcon />}
+                                 >
+                                     {item.modifiers && item.modifiers.length > 0 ? 'Customize' : 'Add to Order'}
+                                 </Button>
+                             </Box>
+                         </Card>
+                     </Grid>
+                 ))}
+             </Grid>
+          </Box>
+      )}
+
+
+      <Grid container spacing={3}>
+        {/* --- LEFT COLUMN: MENU (Unchanged) --- */}
+        <Grid item xs={12} md={7}>
+          <Paper sx={{ p: 2, mb: 3 }}>
+            <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2}>
+              <TextField
+                label="Search Menu..."
+                variant="outlined"
+                size="small"
+                fullWidth
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)} 
+                InputProps={{
+                  startAdornment: <SearchIcon color="action" sx={{ mr: 1 }} />
+                }}
+              />
+            </Stack>
+            <Tabs
+              value={selectedCategory}
+              onChange={(e, newValue) => setSelectedCategory(newValue)}
+              variant="scrollable"
+              scrollButtons="auto"
+              allowScrollButtonsMobile
+              sx={{ mt: 2 }}
+            >
+              {categories.map((category) => (
+                <Tab key={category} label={category} value={category} />
+              ))}
+            </Tabs>
+          </Paper>
+
+          {loading ? (
+            <Box sx={{display: 'flex', justifyContent: 'center', p: 4}}><CircularProgress /></Box>
+          ) : Object.keys(menuByCategories).length === 0 ? (
+            <Typography sx={{ p: 3, textAlign: 'center', fontStyle: 'italic' }}>
+              No items match your search. Try another category!
+            </Typography>
+          ) : (
+            <Stack spacing={4}>
+             {Object.keys(menuByCategories).map(category => (
+                <Box key={category}>
+                  <Typography variant="h4" component="h2" gutterBottom sx={{ fontWeight: 'bold', borderBottom: 2, borderColor: 'primary.main', pb: 1, color: 'text.primary' }}>
+                    {category}
+                  </Typography>
+                  <Grid container spacing={2}>
+                    {menuByCategories[category].map(item => (
+                      <Grid item key={item._id} xs={12} sm={6}>
+                        <Card sx={{ display: 'flex', height: '100%' }}>
+                          <CardMedia
+                            component="img"
+                            sx={{ width: 120, height: 120, m: 1.5, borderRadius: 1.5, flexShrink: 0 }}
+                            image={item.imageUrl || '/images/placeholder-food.jpg'}
+                            alt={item.name}
+                            onError={(e) => { e.target.src = '/images/placeholder-food.jpg'; }}
+                          />
+                          <Box sx={{ display: 'flex', flexDirection: 'column', flexGrow: 1, p: 1.5, pl: 0 }}>
+                            <CardContent sx={{ p: 0, flex: '1 0 auto' }}>
+                              <Typography variant="h6" sx={{ lineHeight: 1.2 }}>{item.name}</Typography>
+                              <Typography variant="body1" color="text.secondary" sx={{ fontWeight: 'bold' }}>₹{item.price}</Typography>
+                            </CardContent>
+                            <Box sx={{ mt: 1, alignSelf: 'flex-end' }}>
+                              <Button 
+                                variant="contained" 
+                                size="small"
+                                startIcon={<AddIcon />} 
+                                onClick={() => handleOpenCustomization(item)}
+                              >
+                                {item.modifiers && item.modifiers.length > 0 ? 'Customize' : 'Add'}
+                              </Button> 
+                            </Box>
+                          </Box>
+                        </Card>
+                      </Grid>
+                    ))}
+                  </Grid>
+                </Box>
+             ))}
+            </Stack>
+          )}
+        </Grid>
+
+        {/* --- RIGHT COLUMN: CART (Unchanged except one line) --- */}
+        <Grid item xs={12} md={5}>
+          <Card sx={{ position: 'sticky', top: 20 }}>
+            <CardContent>
+              <Typography variant="h4" gutterBottom>Your Order</Typography>
+              {cart.length === 0 ? ( <Typography>Your cart is empty.</Typography> ) : (
+                <Box>
+                  <List>
+                    {cart.map((item) => (
+                      <ListItem 
+                        key={item.cartId || item._id} 
+                        divider 
+                        sx={{ py: 1.5, pr: 1, flexWrap: 'wrap' }} 
+                      >
+                        {/* --- TOP ROW: NAME, QTY, DELETE --- */}
+                        <Box display="flex" justifyContent="space-between" alignItems="center" width="100%">
+                          <ListItemText 
+                            primary={item.name} 
+                            secondary={item.customization ? `₹${item.price.toFixed(2)} (Customized)` : `₹${item.price} each`} 
+                            sx={{ m: 0 }} 
+                          />
+                          <Box sx={{ display: 'flex', alignItems: 'center', ml: 'auto' }}>
+                            <Button size="small" variant="outlined" onClick={() => handleQuantityChange(item.cartId || item._id, -1)} sx={{ minWidth: '30px', padding: '1px', lineHeight: 1 }} aria-label="decrease quantity">-</Button>
+                            <Typography sx={{ px: 1.5, minWidth: '20px', textAlign: 'center' }} aria-label="quantity">{item.quantity}</Typography>
+                            <Button size="small" variant="outlined" onClick={() => handleQuantityChange(item.cartId || item._id, 1)} sx={{ minWidth: '30px', padding: '1px', lineHeight: 1 }} aria-label="increase quantity">+</Button>
+                            <IconButton edge="end" aria-label="delete" onClick={() => handleRemoveItem(item.cartId || item._id)} size="small" sx={{ ml: 1}}> 
+                              <DeleteIcon fontSize="small" /> 
+                            </IconButton>
+                          </Box>
+                        </Box>
+                        
+                        {/* --- MIDDLE ROW: CUSTOMIZATION SUMMARY --- */}
+                        {item.customization && item.customization.length > 0 && (
+                            <Typography variant="caption" sx={{ width: '100%', pt: 0.5, color: 'text.secondary', fontStyle: 'italic' }}>
+                                {getCustomizationSummary(item)}
+                            </Typography>
+                        )}
+                        
+                        {/* --- BOTTOM ROW: NOTE --- */}
+                        <Box display="flex" width="100%" sx={{ pt: item.customization ? 0.5 : 1 }}>
+                          <Button 
+                            variant="text" 
+                            size="small" 
+                            startIcon={<EditNoteIcon />}
+                            onClick={() => openNoteModal(item)}
+                            sx={{ textTransform: 'none', p: 0.5 }}
+                          >
+                            {item.note ? 'Edit Note' : 'Add Note'}
+                          </Button>
+                          {item.note && (
+                            <Typography variant="caption" sx={{ pl: 1, fontStyle: 'italic', color: 'text.secondary', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                              "{item.note}"
+                            </Typography>
+                          )}
+                        </Box>
+                      </ListItem>
+                    ))}
+                  </List>
+                  <Typography variant="h5" sx={{ mt: 2 }}> Total: ₹{getTotalPrice()} </Typography>
+                </Box>
+              )}
+              {/* --- Conditional Checkout UI --- */}
+              <Box sx={{ mt: 3 }}>
+                {customerToken ? (
+                  // --- UPDATED: This button now opens the modal ---
+                  <Button onClick={handleSubmitOrder} variant="contained" color="success" size="large" fullWidth disabled={cart.length === 0}>
+                    Proceed to Checkout
+                  </Button>
+                ) : (
+                  <Box textAlign="center">
+                    <Alert severity="info" sx={{ mb: 2 }}>Please log in or register to place an order.</Alert>
+                    <Button component={RouterLink} to="/customer/login" state={{ from: 'checkout' }} variant="contained" color="primary" size="large" sx={{ mr: 1 }}>Login to Order</Button>
+                    <Button component={RouterLink} to="/customer/register" variant="outlined" color="primary" size="large">Register</Button>
+                  </Box>
+                )}
+              </Box>
+            </CardContent>
+          </Card>
+        </Grid>
+      </Grid>
+
+      {/* --- NOTE EDITING MODAL (Unchanged) --- */}
+      <Dialog open={noteModalOpen} onClose={closeNoteModal} fullWidth maxWidth="xs">
+        {/* ... (This modal is unchanged) ... */}
+        <DialogTitle>Add Note for {currentItemForNote?.name}</DialogTitle>
+        <DialogContent>
+          <TextField
+            autoFocus margin="dense"
+            label="Special Instructions (e.g., extra spicy)"
+            type="text" fullWidth variant="outlined"
+            multiline rows={3}
+            value={currentNoteText}
+            onChange={(e) => setCurrentNoteText(e.target.value)}
+          />
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={closeNoteModal}>Cancel</Button>
+          <Button onClick={handleSaveNote} variant="contained">Save Note</Button>
+        </DialogActions>
+      </Dialog>
+      
+      {/* --- CUSTOMIZATION MODAL RENDER (Unchanged) --- */}
+      <CustomizeModal 
+        item={itemToCustomize}
+        open={customizationModalOpen}
+        onClose={() => setCustomizationModalOpen(false)}
+        onCustomize={handleItemCustomized}
+      />
+      
+      {/* --- NEW: ADDRESS MODAL RENDER --- */}
+      <AddressModal
+        open={isAddressModalOpen}
+        onClose={() => setIsAddressModalOpen(false)}
+        onSubmitOrder={handleFinalizeOrder} // Calls the final submit function
+        customerToken={customerToken}
+        showSnackbar={showSnackbar}
+      />
+
+    </Container>
+  );
+}
+
+export default CustomerApp;

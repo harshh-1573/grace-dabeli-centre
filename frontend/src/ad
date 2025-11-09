@@ -1,0 +1,3303 @@
+// // In frontend/src/AdminPanel.js (Chart Fix + Customer Modal)
+
+// import React, { useState, useEffect, useMemo } from 'react';
+// import axios from 'axios';
+// import { io } from "socket.io-client";
+
+// // --- Chart Imports ---
+// import { 
+//   PieChart, Pie, Cell, BarChart, Bar, XAxis, YAxis, 
+//   CartesianGrid, Tooltip, Legend, ResponsiveContainer,
+// } from 'recharts';
+
+
+// // --- CRITICAL IMPORTS ---
+// import EditItemModal from './EditItemModal'; 
+// import EditIcon from '@mui/icons-material/Edit';
+// import SearchIcon from '@mui/icons-material/Search'; 
+
+// // ... (all your existing imports) ...
+// import { useTheme, alpha } from '@mui/material/styles'; // For theme-aware colors
+// import Badge from '@mui/material/Badge'; // For notification badges
+// // ... (all your existing imports) ...
+// import { motion, AnimatePresence } from 'framer-motion'; 
+// // ... (rest of your imports) ...
+
+
+
+// // --- DATE PICKER IMPORTS ---
+// import { AdapterDateFns } from '@mui/x-date-pickers/AdapterDateFns';
+// import { LocalizationProvider } from '@mui/x-date-pickers/LocalizationProvider';
+// import { DatePicker } from '@mui/x-date-pickers/DatePicker';
+// //import LocationOnIcon from '@mui/icons-material/LocationOn'; // <-- NEW: For Address
+// //import NotesIcon from '@mui/icons-material/Notes'; // <-- NEW: For Notes
+// // MUI Imports (Ensure ALL are present)
+// import {
+//   Container, Grid, Card, CardContent, CardActions, Stack,
+//   Typography, Button, TextField, List, ListItem, ListItemText,
+//   Table, TableBody, TableCell, TableContainer, TableHead, TableRow, Paper,
+//   Box, IconButton, Switch, Avatar,
+//   InputLabel, Select, MenuItem, FormControl,
+//   Tabs, Tab, CircularProgress,
+//   Dialog, DialogTitle, DialogContent, Divider, Link ,DialogActions,Alert// <-- NEW: Imports for Modal
+// } from '@mui/material';
+// import DeleteIcon from '@mui/icons-material/Delete';
+// import StarIcon from '@mui/icons-material/Star'; 
+// import LocationOnIcon from '@mui/icons-material/LocationOn'; // <-- NEW: For Address
+// import NotesIcon from '@mui/icons-material/Notes'; // <-- NEW: For Notes
+
+// // Notification sound
+// const audio = new Audio('/ping.mp3');
+
+// // Define API Base URL once
+// const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || 'http://localhost:5001';
+
+// // Available Order Statuses for the filter dropdown
+// const STATUSES = ['All', 'Pending', 'Preparing', 'Ready', 'Completed', 'Cancelled'];
+
+// // --- Colors for the Pie Chart ---
+// const COLORS = ['#FF8042', '#00C49F', '#0088FE', '#FFBB28', '#8884D8']; 
+
+
+// // ==========================================================
+// // --- NEW COMPONENT: Customer Orders Modal ---
+// // ==========================================================
+// const CustomerOrdersModal = ({ open, onClose, customer, orders, loading }) => {
+//   // Helper to render status with color
+//   const renderStatus = (status) => (
+//     <Typography component="span" variant="body2" fontWeight="bold" color={
+//       status === 'Completed' ? 'success.main' :
+//       status === 'Cancelled' ? 'error.main' :
+//       status === 'Ready' ? 'info.main' :
+//       status === 'Preparing' ? 'warning.main' : 'primary.main'
+//     }>
+//       {status}
+//     </Typography>
+//   );
+
+//   return (
+//     <Dialog open={open} onClose={onClose} maxWidth="md" fullWidth>
+//       <DialogTitle>
+//         Order History for: {customer ? customer.name : 'Customer'}
+//       </DialogTitle>
+//       <DialogContent dividers>
+//         {loading ? (
+//           <Box sx={{ display: 'flex', justifyContent: 'center', my: 5 }}>
+//             <CircularProgress />
+//           </Box>
+//         ) : !orders || orders.length === 0 ? (
+//           <Typography textAlign="center" sx={{ my: 5 }}>
+//             No orders found for this customer.
+//           </Typography>
+//         ) : (
+//           <Stack spacing={2} sx={{ py: 2 }}>
+//             <Typography variant="h6">
+//               Total Orders: {orders.length}
+//             </Typography>
+//             {orders.map((order) => (
+//               <Card key={order._id} variant="outlined">
+//                 <CardContent>
+//                   <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 1 }}>
+//                     <Box>
+//                       <Typography variant="h6" component="div">
+//                         Status: {renderStatus(order.status)}
+//                       </Typography>
+//                       <Typography color="text.secondary" sx={{ mb: 1.5 }}>
+//                         Placed on: {new Date(order.createdAt).toLocaleString()}
+//                       </Typography>
+//                     </Box>
+//                     <Typography variant="h6" sx={{ mt: 1, fontWeight: 'bold' }}>
+//                       Total: ₹{order.totalPrice.toFixed(2)}
+//                     </Typography>
+//                   </Box>
+//                   <List dense sx={{ pl: 2, listStyleType: 'disc' }}>
+//                     {order.items.map((item, index) => (
+//                       <ListItem key={index} disablePadding sx={{ display: 'list-item', pl: 1 }}>
+//                         <ListItemText 
+//                           primary={`${item.quantity}x ${item.name}`}
+//                           secondary={
+//                             item.note 
+//                               ? `(₹${item.price.toFixed(2)} each) | Note: ${item.note}`
+//                               : `(₹${item.price.toFixed(2)} each)`
+//                           }
+//                         />
+//                       </ListItem>
+//                     ))}
+//                   </List>
+//                 </CardContent>
+//               </Card>
+//             ))}
+//           </Stack>
+//         )}
+//       </DialogContent>
+//       <DialogActions>
+//         <Button onClick={onClose}>Close</Button>
+//       </DialogActions>
+//     </Dialog>
+//   );
+// };
+// // ==========================================================
+// // --- END OF NEW COMPONENT ---
+// // ==========================================================
+
+
+// function AdminPanel({ showSnackbar }) {
+//   // ... (State declarations are unchanged) ...
+//   const [menuItems, setMenuItems] = useState([]);
+//   const [name, setName] = useState('');
+//   const [price, setPrice] = useState('');
+//   const [category, setCategory] = useState('');
+//   const [imageUrl, setImageUrl] = useState('');
+//   const [orders, setOrders] = useState([]);
+//   const [customers, setCustomers] = useState([]); 
+//   const [stats, setStats] = useState(null); 
+//   const [statsLoading, setStatsLoading] = useState(true);
+//   const [startDate, setStartDate] = useState(null);
+//   const [endDate, setEndDate] = useState(null);
+//   const [filterStatus, setFilterStatus] = useState('All');
+//   const [searchTerm, setSearchTerm] = useState('');
+//   const [quickFilter, setQuickFilter] = useState('All');
+//   const [menuSearchTerm, setMenuSearchTerm] = useState('');
+//   const [menuFilterCategory, setMenuFilterCategory] = useState('All');
+//   const [menuFilterStock, setMenuFilterStock] = useState('All');
+//   const [isModalOpen, setIsModalOpen] = useState(false);
+//   const [itemToEdit, setItemToEdit] = useState(null); 
+//   const [activeTab, setActiveTab] = useState(0); 
+
+//   // --- NEW STATE for Customer Modal ---
+//   const [isCustomerModalOpen, setIsCustomerModalOpen] = useState(false);
+//   const [selectedCustomer, setSelectedCustomer] = useState(null);
+//   const [customerOrders, setCustomerOrders] = useState([]);
+//   const [loadingCustomerOrders, setLoadingCustomerOrders] = useState(false);
+//   const [cateringRequests, setCateringRequests] = useState([]);
+//   const [loadingCatering, setLoadingCatering] = useState(false);
+//   // --- END NEW STATE ---
+
+// // --- NEW STATE & HOOKS ---
+//   const theme = useTheme(); // Get the current theme (light or dark)
+//   const [newOrderCount, setNewOrderCount] = useState(0);
+//   const [newCateringCount, setNewCateringCount] = useState(0);
+  
+
+//   const uniqueCategories = useMemo(() => {
+//     const categories = menuItems.map(item => item.category);
+//     return ['All', ...new Set(categories.filter(cat => cat))]; 
+//   }, [menuItems]);
+
+//   const getAdminAuthHeader = () => {
+//     const token = localStorage.getItem('admin-token');
+//     if (!token) { console.error("Admin token not found. Cannot perform action."); return null; }
+//     return { headers: { 'Authorization': `Bearer ${token}` } };
+//   };
+
+//   // --- Fetching Logic (All functions unchanged) ---
+//   const fetchMenuItems = () => {
+//     const config = getAdminAuthHeader();
+//     if (!config) return; 
+//     axios.get(`${API_BASE_URL}/api/menu/all`, config) 
+//       .then((res) => setMenuItems(res.data))
+//       .catch((err) => {
+//         console.error("Error fetching menu for admin:", err);
+//         showSnackbar(err.response?.data?.Error || err.response?.data || "Failed to fetch menu items", "error");
+//       });
+//   };
+//   const fetchOrders = () => {
+//     const config = getAdminAuthHeader();
+//     if (!config) return; 
+//     const params = {};
+//     if (quickFilter === 'All' && filterStatus !== 'All') { params.status = filterStatus; }
+//     if (searchTerm && searchTerm.length >= 2) { params.search = searchTerm; }
+//     if (quickFilter === 'Last10') { params.limit = 10; } 
+//     else if (quickFilter === 'Last24') { params.quickFilter = '24hrs'; }
+    
+//     axios.get(`${API_BASE_URL}/api/orders/`, { params, ...config }) 
+//       .then((res) => setOrders(res.data))
+//       .catch((err) => { 
+//         console.log("Error fetching orders:", err.response?.data || err.message); 
+//         showSnackbar(err.response?.data?.Error || err.response?.data || "Failed to fetch orders", "error");
+//       });
+//   };
+//   const fetchCustomers = () => {
+//     const config = getAdminAuthHeader();
+//     if (!config) return showSnackbar("Auth error fetching customers", "error");
+//     axios.get(`${API_BASE_URL}/api/customers/all`, config)
+//       .then((res) => {
+//         setCustomers(res.data.customers);
+//       })
+//       .catch((err) => {
+//         console.error("Error fetching customers:", err);
+//         showSnackbar(err.response?.data?.msg || "Failed to fetch customers", "error");
+//       });
+//   };
+//   const fetchAnalytics = async () => {
+//     setStatsLoading(true);
+//     const config = getAdminAuthHeader();
+//     if (!config) return showSnackbar("Auth error fetching stats", "error");
+//     const params = {};
+//     if (startDate) params.startDate = startDate.toISOString().split('T')[0];
+//     if (endDate) params.endDate = endDate.toISOString().split('T')[0];
+//     try {
+//       const res = await axios.get(`${API_BASE_URL}/api/analytics/`, { ...config, params });
+//       setStats(res.data);
+//     } catch (err) {
+//       console.error("Error fetching stats:", err);
+//       showSnackbar(err.response?.data || "Failed to fetch stats", "error");
+//     } finally {
+//       setStatsLoading(false);
+//     }
+//   };
+  
+//   // --- NEW: Fetch logic for Customer Modal ---
+//   const fetchCustomerOrders = (customerId) => {
+//     setLoadingCustomerOrders(true);
+//     const config = getAdminAuthHeader();
+//     if (!config) {
+//       setLoadingCustomerOrders(false);
+//       return;
+//     }
+    
+//     axios.get(`${API_BASE_URL}/api/orders/bycustomer/${customerId}`, config)
+//       .then(res => {
+//         setCustomerOrders(res.data);
+//       })
+//       .catch(err => {
+//         console.error("Error fetching customer orders:", err);
+//         showSnackbar("Failed to load customer's orders.", "error");
+//       })
+//       .finally(() => {
+//         setLoadingCustomerOrders(false);
+//       });
+//   };
+
+
+// // Add this new function to fetch the list of requests:
+// const fetchCateringRequests = async () => {
+//     setLoadingCatering(true);
+//     const config = getAdminAuthHeader();
+//     if (!config) return showSnackbar("Auth error fetching catering requests", "error");
+
+//     try {
+//         const res = await axios.get(`${API_BASE_URL}/api/catering/all`, config);
+//         setCateringRequests(res.data);
+//     } catch (err) {
+//         console.error("Error fetching catering requests:", err);
+//         showSnackbar(err.response?.data || "Failed to fetch catering requests.", "error");
+//     } finally {
+//         setLoadingCatering(false);
+//     }
+// };
+
+
+//   // --- Effects (Unchanged) ---
+//   // This block replaces the entire useEffect section you provided (around lines 140-165 in your file).
+
+// useEffect(() => {
+//     const socket = io(API_BASE_URL);
+    
+//     // --- UPDATED SOCKET LISTENER ---
+//     socket.on('new_order', (newOrder) => {
+//       audio.play().catch(e => console.log("Audio play failed:", e));
+      
+//       // Add order to the wall if filters match
+//       if (quickFilter === 'All' && (filterStatus === 'All' || newOrder.status === filterStatus)) {
+//         setOrders((prevOrders) => [newOrder, ...prevOrders]);
+//       }
+      
+//       // Increment notification badge count
+//       setNewOrderCount(prev => prev + 1); 
+//     });
+
+//     // --- UPDATED SOCKET LISTENER ---
+//     socket.on('new_catering_request', (newRequest) => {
+//       audio.play().catch(e => console.log("Audio play failed (Catering):", e));
+      
+//       // Add request to the list
+//       setCateringRequests((prevRequests) => [newRequest, ...prevRequests]);
+      
+//       // Increment notification badge count
+//       setNewCateringCount(prev => prev + 1);
+//       showSnackbar('NEW CATERING REQUEST RECEIVED!', 'warning');
+//     });
+//     // --- END UPDATES ---
+
+//     socket.on("connect_error", (err) => { console.error(`Socket.IO connection error: ${err.message}`); });
+//     return () => { socket.disconnect(); };
+//   }, [filterStatus, quickFilter, showSnackbar]); // Dependencies unchanged
+
+//   // 2. Initial Data Fetch for Menu (runs only once)
+//   useEffect(() => { 
+//     fetchMenuItems(); 
+//   }, []); 
+
+//   // 3. Data Fetching based on Order Filters
+//   useEffect(() => { 
+//     fetchOrders(); 
+//   }, [filterStatus, searchTerm, quickFilter]); 
+
+//   // 4. Data Fetching based on Tab Switch
+//   useEffect(() => {
+//     if (activeTab === 2) { fetchCustomers(); } // Customers Tab
+//     if (activeTab === 3) { fetchAnalytics(); } // Analytics Tab
+//     if (activeTab === 4) { fetchCateringRequests(); } // Catering Tab
+//   }, [activeTab]); // This is correct
+
+//   // 5. Data Fetching based on Date Range
+//   useEffect(() => {
+//     if (activeTab === 3) { fetchAnalytics(); }
+//   }, [startDate, endDate]);
+
+
+
+//   // --- NEW TAB HANDLER ---
+//   const handleTabChange = (e, newValue) => {
+//     // Reset the notification count when the tab is clicked
+//     if (newValue === 0) setNewOrderCount(0);
+//     if (newValue === 4) setNewCateringCount(0);
+//     setActiveTab(newValue);
+//   };
+//   // --- END NEW TAB HANDLER ---
+  
+//   // --- NEW: Handler for opening the customer modal ---
+//   const handleCustomerClick = (customer) => {
+//     setSelectedCustomer(customer);
+//     setIsCustomerModalOpen(true);
+//     fetchCustomerOrders(customer._id); // Fetch orders when modal opens
+//   };
+
+//   const handleEditClick = (item) => { setItemToEdit(item); setIsModalOpen(true); };
+//   const handleMenuSubmit = (e) => { 
+//     e.preventDefault();
+//     const newItem = { name, price, category, imageUrl };
+//     const config = getAdminAuthHeader();
+//     if (!config) return showSnackbar("Authentication error. Please log in again.", 'error');
+//     axios.post(`${API_BASE_URL}/api/menu/add`, newItem, config)
+//       .then((res) => {
+//         showSnackbar(`Item "${name}" added successfully!`, 'success');
+//         setName(''); setPrice(''); setCategory(''); setImageUrl('');
+//         fetchMenuItems(); 
+//       })
+//       .catch((err) => {
+//          showSnackbar(`Error adding item: ${err.response?.data?.Error || err.response?.data || 'Failed to add item'}`, 'error');
+//       });
+//   };
+//   const handleUpdateStatus = (orderId, newStatus) => { 
+//     const apiEndpoint = `${API_BASE_URL}/api/orders/update/${orderId}`; 
+//     const config = getAdminAuthHeader();
+//     if (!config) return showSnackbar("Authentication error. Please log in again.", 'error');
+//     axios.patch(apiEndpoint, { status: newStatus }, config)
+//       .then((res) => {
+//         setOrders(prevOrders => prevOrders.map(order => order._id === orderId ? { ...order, status: newStatus } : order ));
+//         showSnackbar('Status updated!', 'success');
+//       })
+//       .catch((err) => {
+//          showSnackbar(`Error updating status: ${err.response?.data || 'Failed to update'}`, 'error');
+//       });
+//   };
+//   const handleDeleteItem = (itemId) => {
+//     if (window.confirm('Are sure you want to delete this item?')) {
+//       const config = getAdminAuthHeader();
+//       if (!config) return showSnackbar("Authentication error. Please log in again.", 'error');
+//       axios.delete(`${API_BASE_URL}/api/menu/${itemId}`, config)
+//         .then((res) => { 
+//            fetchMenuItems(); 
+//            showSnackbar('Item deleted successfully!', 'info');
+//         })
+//         .catch((err) => {
+//            showSnackbar(`Error deleting item: ${err.response?.data?.Error || err.response?.data || 'Failed to delete'}`, 'error');
+//         });
+//     }
+//   };
+//   const handleToggleFeatured = (item) => { 
+//     const newFeaturedStatus = !item.isFeatured;
+//     const apiEndpoint = `${API_BASE_URL}/api/menu/update/${item._id}`;
+//     const config = getAdminAuthHeader();
+//     if (!config) return showSnackbar("Authentication error. Please log in again.", 'error');
+    
+//     axios.patch(apiEndpoint, { isFeatured: newFeaturedStatus }, config)
+//       .then((res) => { 
+//          fetchMenuItems(); 
+//          showSnackbar(`"${item.name}" ${newFeaturedStatus ? 'is now featured!' : 'is no longer featured.'}`, 'info');
+//       })
+//       .catch((err) => {
+//          showSnackbar(`Error updating featured status: ${err.response?.data?.Error || 'Failed to update'}`, 'error');
+//       });
+//   };
+//   const handleToggleStock = (item) => { 
+//     const newInStockStatus = !item.inStock;
+//     const apiEndpoint = `${API_BASE_URL}/api/menu/update/${item._id}`;
+//     const config = getAdminAuthHeader();
+//     if (!config) return showSnackbar("Authentication error. Please log in again.", 'error');
+//     axios.patch(apiEndpoint, { inStock: newInStockStatus }, config)
+//       .then((res) => { 
+//          fetchMenuItems(); 
+//          showSnackbar(`Stock updated to ${newInStockStatus ? 'In Stock' : 'Sold Out'}`, 'info');
+//       })
+//       .catch((err) => {
+//          showSnackbar(`Error updating stock: ${err.response?.data?.Error || err.response?.data || 'Failed to update'}`, 'error');
+//       });
+//   };
+//   const getFilterVariant = (filter) => quickFilter === filter ? 'contained' : 'outlined';
+
+
+//   // --- RENDER FUNCTIONS FOR TABS ---
+  
+//   // Tab 1: Order Wall Content (Unchanged)
+//   // ==========================================================
+//   // --- ⚠️ UPDATED: Tab 1: Order Wall Content ---
+//   // ==========================================================
+// // ==========================================================
+// // --- ✅ NEW REFACTORED: Tab 1 - Animated Order Feed ---
+// // ==========================================================
+// const renderOrderWall = () => {
+//   // Helper function to get theme-aware card styles (Unchanged)
+//   const getCardStyle = (status) => {
+//     let color = 'default';
+//     let palette = theme.palette;
+
+//     switch (status) {
+//       case 'Pending':   color = 'primary'; break;
+//       case 'Preparing': color = 'warning'; break;
+//       case 'Ready':     color = 'info';    break;
+//       case 'Completed': color = 'success'; break;
+//       case 'Cancelled': color = 'error';   break;
+//       default:          color = 'grey';
+//     }
+
+//     const mainColor = palette[color]?.main || palette.grey[500];
+
+//     return {
+//       backgroundColor: alpha(mainColor, 0.1), 
+//       borderLeft: `6px solid ${mainColor}`,
+//       borderRadius: 2,
+//       boxShadow: 1,
+//       transition: 'box-shadow 0.25s ease', // We let Framer Motion handle transform
+//       '&:hover': {
+//         boxShadow: 4,
+//       },
+//     };
+//   };
+
+//   return (
+//     <Box sx={{ p: { xs: 1, sm: 2 } }}>
+//       <Typography variant="h5" gutterBottom>Order Wall</Typography>
+      
+//       {/* --- Filter Controls (Unchanged) --- */}
+//       <Box sx={{ mb: 1, display: 'flex', gap: 1, flexWrap: 'wrap' }}>
+//         <Button size="small" variant={getFilterVariant('All')} onClick={() => setQuickFilter('All')}>View All</Button>
+//         <Button size="small" variant={getFilterVariant('Last10')} onClick={() => setQuickFilter('Last10')}>Last 10 Orders</Button>
+//         <Button size="small" variant={getFilterVariant('Last24')} onClick={() => setQuickFilter('Last24')}>Last 24 Hours</Button>
+//       </Box>
+
+//       {/* --- Search & Filter (Unchanged) --- */}
+//       <Box sx={{ mb: 3, display: 'flex', gap: 2, alignItems: 'center', flexWrap: { xs: 'wrap', sm: 'nowrap' } }}>
+//         <FormControl sx={{ minWidth: 150 }} size="small" variant="outlined">
+//           <InputLabel>Filter Status</InputLabel>
+//           <Select
+//             value={filterStatus}
+//             label="Filter Status"
+//             onChange={(e) => setFilterStatus(e.target.value)}
+//             disabled={quickFilter !== 'All'}
+//           >
+//             {STATUSES.map((status) => (
+//               <MenuItem key={status} value={status}>{status}</MenuItem>
+//             ))}
+//           </Select>
+//         </FormControl>
+//         <TextField
+//           label="Search Name or Phone"
+//           size="small"
+//           value={searchTerm}
+//           onChange={(e) => setSearchTerm(e.target.value)}
+//           InputProps={{ startAdornment: <SearchIcon color="action" sx={{ mr: 1 }} /> }}
+//           sx={{ flexGrow: 1 }}
+//           variant="outlined"
+//         />
+//       </Box>
+
+//       {/* --- NEW: Animated Feed Layout --- */}
+//       <Box sx={{ 
+//         maxWidth: '900px', // Constrain the width to solve the "too large" problem
+//         mx: 'auto'         // Center the feed
+//       }}>
+//         <Stack spacing={2}>
+//           <AnimatePresence> {/* This wrapper handles items being added or removed */}
+//             {orders.length === 0 ? (
+//               <Typography sx={{ p: 3, textAlign: 'center' }}>
+//                 No orders found matching the filter criteria.
+//               </Typography>
+//             ) : (
+//               orders.map((order) => (
+//                 // We replace <Card> with <motion.div> wrapping the <Card>
+//                 // We give it a key, layout prop, and animation states.
+//                 <motion.div
+//                   key={order._id}
+//                   layout="position" // This magic prop animates the list re-ordering
+//                   initial={{ opacity: 0, y: -50, scale: 0.9 }} // Start: invisible, 50px up
+//                   animate={{ opacity: 1, y: 0, scale: 1 }}     // End: visible, at its position
+//                   exit={{ opacity: 0, x: -300 }}           // On Remove: fade and slide left
+//                   transition={{ type: 'spring', stiffness: 260, damping: 20 }}
+//                 >
+//                   <Card sx={getCardStyle(order.status)}>
+                    
+//                     {/* --- PICKUP BADGE (Unchanged) --- */}
+//                     {order.orderType === 'Pickup' && (
+//                       <Box sx={{ p: 1, mb: 1, backgroundColor: 'secondary.main', color: 'secondary.contrastText' }}>
+//                         <Typography variant="h6" align="center" fontWeight="bold">
+//                           PICKUP ORDER
+//                         </Typography>
+//                       </Box>
+//                     )}
+
+//                     <CardContent sx={{ pb: '16px !important', p: 1.5 }}>
+//                       {/* --- TOP ROW: Status and Total (Unchanged) --- */}
+//                       <Box display="flex" justifyContent="space-between" alignItems="flex-start" flexWrap="wrap" gap={1} sx={{ mb: 2 }}>
+//                         <Typography component="span" variant="h5" fontWeight="bold" color="inherit">
+//                           {order.status.toUpperCase()}
+//                         </Typography>
+//                         <Typography variant="h5" sx={{ fontWeight: 'bold' }}>
+//                           Total: ₹{order.totalPrice.toFixed(2)}
+//                         </Typography>
+//                       </Box>
+
+//                       {/* --- INFO GRID (Unchanged) --- */}
+//                       <Grid container spacing={2} sx={{ mb: 1.5 }}>
+//                         <Grid item xs={12} md={6}>
+//                           <Typography variant="h6" gutterBottom>Customer</Typography>
+//                           <Typography variant="body1" fontWeight="bold">{order.customerName}</Typography>
+//                           <Typography variant="body2" color="text.secondary">{order.customerPhone}</Typography>
+//                         </Grid>
+//                         <Grid item xs={12} md={6}>
+//                           {order.orderType === 'Pickup' ? (
+//                             <>
+//                               <Typography variant="h6" gutterBottom>Order Type</Typography>
+//                               <Typography color="secondary.main" variant="body1" fontWeight="bold">
+//                                 In-Store Pickup
+//                               </Typography>
+//                             </>
+//                           ) : (
+//                             <>
+//                               <Typography variant="h6" gutterBottom sx={{ display: 'flex', alignItems: 'center' }}>
+//                                 <LocationOnIcon fontSize="small" sx={{ mr: 0.5 }} /> Delivery Address
+//                               </Typography>
+//                               <Typography color="text.secondary" variant="body2">
+//                                 {order.deliveryAddress ? `${order.deliveryAddress.street}, ${order.deliveryAddress.city}` : 'N/A'}
+//                               </Typography>
+//                             </>
+//                           )}
+//                         </Grid>
+//                       </Grid>
+
+//                       <Divider sx={{ my: 1.5 }} />
+
+//                       {/* --- ITEMS & NOTES (Unchanged) --- */}
+//                       <Box>
+//                         <Typography variant="h6" fontWeight="bold">Items Ordered</Typography>
+//                         <List dense sx={{ pl: 2, pt: 0, maxHeight: 150, overflowY: 'auto' }}>
+//                           {order.items.map((item, index) => (
+//                             <ListItem
+//                               key={index}
+//                               disablePadding
+//                               sx={{ display: 'list-item', listStyleType: 'disc', listStylePosition: 'inside', pt: 0.5 }}
+//                             >
+//                               <ListItemText
+//                                 primaryTypographyProps={{ fontWeight: 'bold' }}
+//                                 primary={`${item.quantity}x ${item.name}`}
+//                                 secondary={`(₹${item.price.toFixed(2)} each)`}
+//                               />
+//                               {item.note && (
+//                                 <Typography variant="body2" sx={{ display: 'flex', alignItems: 'center', fontStyle: 'italic', color: 'error.main', pl: 2 }}>
+//                                   <NotesIcon fontSize="small" sx={{ mr: 0.5 }} /> Note: {item.note}
+//                                 </Typography>
+//                               )}
+//                             </ListItem>
+//                           ))}
+//                         </List>
+//                       </Box>
+//                     </CardContent>
+
+//                     {/* --- ACTION BUTTONS (Unchanged) --- */}
+//                     <CardActions sx={{ backgroundColor: alpha(theme.palette.grey[500], 0.05), p: 1.5 }}>
+//                       <Stack direction="row" spacing={1} flexWrap="wrap">
+//                         <Button size="small" variant="contained" color="warning" onClick={() => handleUpdateStatus(order._id, 'Preparing')} disabled={order.status !== 'Pending'}>
+//                           Preparing
+//                         </Button>
+//                         <Button size="small" variant="contained" color="info" onClick={() => handleUpdateStatus(order._id, 'Ready')} disabled={order.status !== 'Preparing'}>
+//                           Ready
+//                         </Button>
+//                         <Button size="small" variant="contained" color="success" onClick={() => handleUpdateStatus(order._id, 'Completed')} disabled={order.status !== 'Ready'}>
+//                           Completed
+//                         </Button>
+//                         <Button size="small" variant="outlined" color="error" onClick={() => handleUpdateStatus(order._id, 'Cancelled')} disabled={order.status === 'Completed' || order.status === 'Cancelled'}>
+//                           Cancel
+//                         </Button>
+//                       </Stack>
+//                     </CardActions>
+//                   </Card>
+//                 </motion.div>
+//               ))
+//             )}
+//           </AnimatePresence>
+//         </Stack>
+//       </Box>
+//     </Box>
+//   );
+// };
+// // ==========================================================
+// // --- END REFACTORED FUNCTION ---
+// // ==========================================================
+
+
+// // ==========================================================
+
+
+
+//   // ==========================================================
+//   // --- END OF UPDATED FUNCTION ---
+//   // ==========================================================
+
+//   // Tab 2: Menu Admin Content (Unchanged)
+//   const renderMenuAdmin = () => {
+//     const filteredMenuItems = menuItems.filter(item => {
+//       const nameMatch = item.name.toLowerCase().includes(menuSearchTerm.toLowerCase());
+//       const categoryMatch = menuFilterCategory === 'All' || item.category === menuFilterCategory;
+//       const stockMatch = menuFilterStock === 'All' 
+//         || (menuFilterStock === 'In Stock' && item.inStock)
+//         || (menuFilterStock === 'Out of Stock' && !item.inStock);
+//       return nameMatch && categoryMatch && stockMatch;
+//     });
+
+//     return (
+//       <Box sx={{ p: 2 }}>
+//           {/* 1. Add Item Form (Unchanged) */}
+//           <Paper elevation={3} sx={{ p: 2, mb: 3 }}>
+//               <Typography variant="h6" gutterBottom>Add New Item</Typography>
+//               <Box component="form" onSubmit={handleMenuSubmit} sx={{ display: 'flex', gap: 2, flexWrap: 'wrap', alignItems: 'center' }}>
+//                   <TextField label="Name" variant="outlined" size="small" value={name} onChange={(e) => setName(e.target.value)} required sx={{ flexGrow: 1 }}/>
+//                   <TextField label="Price" type="number" variant="outlined" size="small" value={price} onChange={(e) => setPrice(e.target.value)} required sx={{ width: '80px' }}/>
+//                   <TextField label="Category" variant="outlined" size="small" value={category} onChange={(e) => setCategory(e.target.value)} required sx={{ flexGrow: 1 }}/>
+//                   <TextField label="Image URL (Optional)" variant="outlined" size="small" value={imageUrl} onChange={(e) => setImageUrl(e.target.value)} fullWidth sx={{ mt: 1 }} />
+//                   <Button type="submit" variant="contained" sx={{ mt: 1 }}>Add Item</Button>
+//               </Box>
+//           </Paper>
+
+//           {/* 2. Filter Controls (Unchanged) */}
+//           <Paper elevation={3} sx={{ p: 2, mb: 3 }}>
+//             <Typography variant="h6" gutterBottom>Filter Menu</Typography>
+//             <Stack direction={{ xs: 'column', md: 'row' }} spacing={2}>
+//               {/* 1. Search Bar */}
+//               <TextField
+//                 label="Search by Name"
+//                 variant="outlined"
+//                 size="small"
+//                 fullWidth
+//                 value={menuSearchTerm}
+//                 onChange={(e) => setMenuSearchTerm(e.target.value)}
+//                 InputProps={{ startAdornment: <SearchIcon color="action" sx={{ mr: 1 }} /> }}
+//               />
+//               {/* 2. Category Filter */}
+//               <FormControl size="small" fullWidth sx={{ minWidth: 200 }}>
+//                 <InputLabel>Filter by Category</InputLabel>
+//                 <Select
+//                   value={menuFilterCategory}
+//                   label="Filter by Category"
+//                   onChange={(e) => setMenuFilterCategory(e.target.value)}
+//                 >
+//                   {uniqueCategories.map(cat => (
+//                     <MenuItem key={cat} value={cat}>{cat}</MenuItem>
+//                   ))}
+//                 </Select>
+//               </FormControl>
+//               {/* 3. Stock Filter */}
+//               <FormControl size="small" fullWidth sx={{ minWidth: 200 }}>
+//                 <InputLabel>Filter by Stock</InputLabel>
+//                 <Select
+//                   value={menuFilterStock}
+//                   label="Filter by Stock"
+//                   onChange={(e) => setMenuFilterStock(e.target.value)}
+//                 >
+//                   <MenuItem value="All">All Statuses</MenuItem>
+//                   <MenuItem value="In Stock">In Stock Only</MenuItem>
+//                   <MenuItem value="Out of Stock">Out of Stock Only</MenuItem>
+//                 </Select>
+//               </FormControl>
+//             </Stack>
+//           </Paper>
+
+//           {/* 3. Current Menu Table (Unchanged) */}
+//           <Typography variant="h6" gutterBottom>Current Menu</Typography>
+//           <TableContainer component={Paper} variant="outlined">
+//               <Table sx={{ minWidth: 650 }} size="small">
+//                   <TableHead>
+//                       <TableRow>
+//                           <TableCell sx={{width: 70}}>Image</TableCell>
+//                           <TableCell>Name</TableCell>
+//                           <TableCell>Price</TableCell>
+//                           <TableCell>Category</TableCell>
+//                           <TableCell align="center">In Stock?</TableCell>
+//                           <TableCell align="center">Featured?</TableCell>
+//                           <TableCell align="center">Actions</TableCell>
+//                       </TableRow>
+//                   </TableHead>
+//                   <TableBody>
+//                       {menuItems.length === 0 ? (
+//                         <TableRow>
+//                           <TableCell colSpan={7} align="center">
+//                             <Typography sx={{ p: 2 }}>Loading menu...</Typography>
+//                           </TableCell>
+//                         </TableRow>
+//                       ) : filteredMenuItems.length === 0 ? (
+//                         <TableRow>
+//                           <TableCell colSpan={7} align="center">
+//                             <Typography sx={{ p: 2 }}>No menu items match your filters.</Typography>
+//                           </TableCell>
+//                         </TableRow>
+//                       ) : (
+//                         filteredMenuItems.map((item) => (
+//                           <TableRow key={item._id} hover>
+//                               <TableCell><Avatar variant="rounded" src={item.imageUrl || '/images/placeholder-food.jpg'} alt={item.name} sx={{ width: 50, height: 50 }} onError={(e) => { e.target.src = '/images/placeholder-food.jpg'; }} /></TableCell>
+//                               <TableCell>{item.name}</TableCell>
+//                               <TableCell>₹{item.price}</TableCell>
+//                               <TableCell>{item.category}</TableCell>
+//                               <TableCell align="center"><Switch checked={item.inStock} onChange={() => handleToggleStock(item)} size="small"/></TableCell>
+//                               <TableCell align="center">
+//                                 <IconButton 
+//                                   color={item.isFeatured ? "warning" : "default"} 
+//                                   onClick={() => handleToggleFeatured(item)}
+//                                 >
+//                                   <StarIcon />
+//                                 </IconButton>
+//                               </TableCell>
+//                               <TableCell align="center" sx={{ whiteSpace: 'nowrap' }}>
+//                                   <IconButton aria-label="edit" color="primary" onClick={() => handleEditClick(item)} sx={{ mr: 1 }}><EditIcon fontSize="small"/></IconButton>
+//                                   <IconButton aria-label="delete" color="error" onClick={() => handleDeleteItem(item._id)}><DeleteIcon fontSize="small"/></IconButton>
+//                               </TableCell>
+//                           </TableRow>
+//                         ))
+//                       )}
+//                   </TableBody>
+//               </Table>
+//           </TableContainer>
+//       </Box>
+//     );
+//   }
+
+//   // --- UPDATED: Tab 3: Customer List Content ---
+//   const renderCustomerList = () => (
+//       <Box sx={{ p: 2 }}>
+//         <Typography variant="h5" gutterBottom>Registered Customer List</Typography>
+//         <TableContainer component={Paper} variant="outlined">
+//           <Table sx={{ minWidth: 650 }} size="small">
+//               <TableHead>
+//                   <TableRow>
+//                       <TableCell>Name</TableCell>
+//                       <TableCell>Email</TableCell>
+//                       <TableCell>Phone</TableCell>
+//                       <TableCell>Registered On</TableCell>
+//                   </TableRow>
+//               </TableHead>
+//               <TableBody>
+//                   {customers.length === 0 ? (
+//                     <TableRow>
+//                       <TableCell colSpan={4} align="center">
+//                         <Typography sx={{ p: 2 }}>No customers found.</Typography>
+//                       </TableCell>
+//                     </TableRow>
+//                   ) : (
+//                     customers.map((customer) => (
+//                         <TableRow key={customer._id} hover>
+//                             {/* --- NEW: Made name clickable --- */}
+//                             <TableCell>
+//                               <Link 
+//                                 component="button" 
+//                                 variant="body2"
+//                                 onClick={() => handleCustomerClick(customer)}
+//                                 sx={{ 
+//                                   fontWeight: 'bold', 
+//                                   textDecoration: 'underline', 
+//                                   cursor: 'pointer',
+//                                   color: 'primary.main', // Use theme color
+//                                   textAlign: 'left',
+//                                   background: 'none',
+//                                   border: 'none',
+//                                   padding: 0
+//                                 }}
+//                               >
+//                                 {customer.name}
+//                               </Link>
+//                             </TableCell>
+//                             <TableCell>{customer.email || 'N/A'}</TableCell>
+//                             <TableCell>{customer.phone}</TableCell>
+//                             <TableCell>{new Date(customer.createdAt).toLocaleDateString()}</TableCell>
+//                         </TableRow>
+//                     ))
+//                   )}
+//               </TableBody>
+//           </Table>
+//         </TableContainer>
+//       </Box>
+//   );
+
+//   // ==========================================================
+//   // --- ✅ REFACTORED: Tab 4 - Analytics ---
+//   // ==========================================================
+//   const renderAnalytics = () => {
+//     if (statsLoading) {
+//       return (
+//         <Box sx={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '300px' }}>
+//           <CircularProgress />
+//         </Box>
+//       );
+//     }
+
+//     if (!stats) {
+//       return (
+//         <Box sx={{ p: 2 }}>
+//           <Typography variant="h5" gutterBottom>Analytics Dashboard</Typography>
+//           <Typography variant="body1" color="error">Could not load statistics. Please try refreshing.</Typography>
+//         </Box>
+//       );
+//     }
+
+//     // --- NEW: Map status names to theme colors ---
+//     const statusColorMap = {
+//       'Pending': theme.palette.primary.main,
+//       'Preparing': theme.palette.warning.main,
+//       'Ready': theme.palette.info.main,
+//       'Completed': theme.palette.success.main,
+//       'Cancelled': theme.palette.error.main,
+//     };
+
+//     return (
+//       <LocalizationProvider dateAdapter={AdapterDateFns}>
+//         <Box sx={{ p: 2 }}>
+//           <Typography variant="h5" gutterBottom>Analytics Dashboard</Typography>
+          
+//           {/* 1. DATE FILTERS (Unchanged) */}
+//           <Paper elevation={3} sx={{ p: 2, mb: 3 }}>
+//              {/* ... (your date filter Stack is unchanged) ... */}
+//             <Stack direction={{ xs: 'column', sm: 'row' }} spacing={2} alignItems="center">
+//               <Typography variant="h6" sx={{ mr: 2, minWidth: '150px' }}>Filter by Date:</Typography>
+//               <DatePicker
+//                 label="Start Date"
+//                 value={startDate}
+//                 onChange={(newValue) => setStartDate(newValue)}
+//               />
+//               <DatePicker
+//                 label="End Date"
+//                 value={endDate}
+//                 onChange={(newValue) => setEndDate(newValue)}
+//               />
+//               <Button 
+//                 variant="outlined" 
+//                 onClick={() => { setStartDate(null); setEndDate(null); }}
+//                 disabled={!startDate && !endDate}
+//               >
+//                 Clear
+//               </Button>
+//             </Stack>
+//           </Paper>
+
+//           {/* 2. KPI Cards (Unchanged) */}
+//           <Grid container spacing={2} sx={{ mb: 3 }}>
+//             {/* ... (all your KPI Grid items are unchanged) ... */}
+//             <Grid item xs={12} sm={6} md={4}>
+//               <Paper elevation={3} sx={{ p: 2, textAlign: 'center', height: '100%' }}>
+//                 <Typography variant="h4" color="primary">₹{stats.totalSales.toFixed(2)}</Typography>
+//                 <Typography variant="subtitle1" color="text.secondary">Total Sales (Completed)</Typography>
+//               </Paper>
+//             </Grid>
+//             <Grid item xs={12} sm={6} md={4}>
+//               <Paper elevation={3} sx={{ p: 2, textAlign: 'center', height: '100%' }}>
+//                 <Typography variant="h4" color="primary">₹{stats.averageOrderValue.toFixed(2)}</Typography>
+//                 <Typography variant="subtitle1" color="text.secondary">Avg. Order Value (AOV)</Typography>
+//               </Paper>
+//             </Grid>
+//              <Grid item xs={12} sm={6} md={4}>
+//               <Paper elevation={3} sx={{ p: 2, textAlign: 'center', height: '100%' }}>
+//                 <Typography variant="h4" color="primary">{stats.totalCompletedOrders}</Typography>
+//                 <Typography variant="subtitle1" color="text.secondary">Completed Orders</Typography>
+//               </Paper>
+//             </Grid>
+//              <Grid item xs={12} sm={6} md={4}>
+//               <Paper elevation={3} sx={{ p: 2, textAlign: 'center', height: '100%' }}>
+//                 <Typography variant="h4" color="text.secondary">{stats.totalOrders}</Typography>
+//                 <Typography variant="subtitle1" color="text.secondary">Total Orders (All)</Typography>
+//               </Paper>
+//             </Grid>
+//              <Grid item xs={12} sm={6} md={4}>
+//               <Paper elevation={3} sx={{ p: 2, textAlign: 'center', height: '100%' }}>
+//                 <Typography variant="h4" color="error">{stats.totalCancelledOrders}</Typography>
+//                 <Typography variant="subtitle1" color="text.secondary">Cancelled Orders</Typography>
+//               </Paper>
+//             </Grid>
+//           </Grid>
+
+//           {/* 3. Charts (Layout Corrected & Themed) */}
+//           <Grid container spacing={3}>
+            
+//             {/* --- PIE CHART FIX --- */}
+//             <Grid item xs={12} md={6}>
+//               <Typography variant="h6" gutterBottom align="center">Order Status Breakdown</Typography>
+//               <Paper elevation={3} sx={{ p: 2, height: 400 }}>
+//                 <ResponsiveContainer width="100%" height="100%">
+//                   <PieChart>
+//                     <Pie
+//                       data={stats.statusBreakdown}
+//                       cx="50%"
+//                       cy="50%"
+//                       labelLine={false}
+//                       outerRadius={150}
+//                       fill="#8884d8"
+//                       dataKey="value"
+//                     >
+//                       {/* --- THIS .map() IS THE THEME FIX --- */}
+//                       {stats.statusBreakdown.map((entry, index) => (
+//                         <Cell key={`cell-${index}`} fill={statusColorMap[entry.name] || COLORS[index % COLORS.length]} name={entry.name} />
+//                       ))}
+//                     </Pie>
+//                     {/* Tooltip text color will now match the theme */}
+//                     <Tooltip contentStyle={{ backgroundColor: theme.palette.background.paper, color: theme.palette.text.primary }} />
+//                     <Legend />
+//                   </PieChart>
+//                 </ResponsiveContainer>
+//               </Paper>
+//             </Grid>
+
+//             {/* --- BAR CHART FIX --- */}
+//             <Grid item xs={12} md={6}>
+//               <Typography variant="h6" gutterBottom align="center">Top 5 Selling Items</Typography>
+//               <Paper elevation={3} sx={{ p: 2, height: 400 }}>
+//                 <ResponsiveContainer width="100%" height="100%">
+//                   <BarChart
+//                     data={stats.topItems}
+//                     margin={{ top: 5, right: 30, left: 20, bottom: 80 }}
+//                   >
+//                     <CartesianGrid strokeDasharray="3 3" />
+//                     <XAxis 
+//                       dataKey="name" 
+//                       angle={-45} 
+//                       textAnchor="end" 
+//                       interval={0} 
+//                       height={100}
+//                       stroke={theme.palette.text.secondary} // Theme fix
+//                     />
+//                     <YAxis allowDecimals={false} stroke={theme.palette.text.secondary} /> // Theme fix
+//                     <Tooltip contentStyle={{ backgroundColor: theme.palette.background.paper, color: theme.palette.text.primary }} />
+//                     <Legend />
+//                     {/* --- THIS 'fill' IS THE THEME FIX --- */}
+//                     <Bar dataKey="quantity" fill={theme.palette.primary.main} /> 
+//                   </BarChart>
+//                 </ResponsiveContainer>
+//               </Paper>
+//             </Grid>
+//           </Grid>
+//         </Box>
+//       </LocalizationProvider>
+//     );
+//   };
+// // ==========================================================
+// // --- END REFACTORED FUNCTION ---
+// // ==========================================================
+// // ==========================================================
+// // --- 5️⃣ NEW: Tab 5: Catering Requests Content ---
+// // ==========================================================
+// // ==========================================================
+// // --- ✅ REFACTORED: Tab 5 - Catering Requests ---
+// // ==========================================================
+// const renderCateringRequests = () => {
+
+//   // --- UPDATED: Refactored to use theme colors ---
+//   const getCardStyle = (status) => {
+//     let color = 'default';
+//     let palette = theme.palette;
+
+//     switch (status) {
+//       case 'Pending Review': color = 'primary';   break;
+//       case 'Negotiating':    color = 'info';      break;
+//       case 'Confirmed':      color = 'success';   break;
+//       case 'Rejected':       color = 'error';     break;
+//       case 'Completed':      color = 'success';   break;
+//       default:               color = 'grey';
+//     }
+    
+//     const mainColor = palette[color]?.main || palette.grey[500];
+//     let bgColor = alpha(mainColor, 0.1);
+
+//     // Make 'Completed' and 'Rejected' more subtle
+//     if (status === 'Completed' || status === 'Rejected') {
+//       bgColor = alpha(mainColor, 0.05);
+//     }
+
+//     return {
+//       backgroundColor: bgColor,
+//       borderLeft: `6px solid ${mainColor}`,
+//       borderRadius: 2,
+//       boxShadow: 1,
+//       transition: 'all 0.3s ease',
+//       '&:hover': {
+//         transform: 'translateY(-3px)',
+//         boxShadow: 4,
+//       },
+//       height: '100%' // Match card heights
+//     };
+//   };
+  
+//   // --- (This handler is unchanged, just moved for clarity) ---
+//   const handleUpdateStatus = (id, newStatus) => {
+//     const config = getAdminAuthHeader();
+//     if (!config) return;
+
+//     axios
+//       .patch(`${API_BASE_URL}/api/catering/update-status/${id}`, { status: newStatus }, config)
+//       .then((res) => {
+//         setCateringRequests((prev) =>
+//           prev.map((req) => (req._id === id ? res.data : req))
+//         );
+//         showSnackbar(`Request ${id.slice(-4)} status updated to ${newStatus}`, 'success');
+//       })
+//       .catch((err) => {
+//         showSnackbar(
+//           `Error updating status: ${err.response?.data || 'Failed to update'}`,
+//           'error'
+//         );
+//       });
+//   };
+
+//   const renderStatus = (status) => {
+//     let color = 'primary.main';
+//     if (status === 'Confirmed' || status === 'Completed') color = 'success.main';
+//     if (status === 'Negotiating') color = 'info.main';
+//     if (status === 'Rejected') color = 'error.main';
+
+//     return (
+//       <Typography component="span" fontWeight="bold" color={color} variant="body2">
+//         {status}
+//       </Typography>
+//     );
+//   };
+  
+//   if (loadingCatering) {
+//     return (
+//       <Box sx={{ display: 'flex', justifyContent: 'center', p: 4 }}>
+//         <CircularProgress />
+//       </Box>
+//     );
+//   }
+
+//   return (
+//     <Box sx={{ p: 2 }}>
+//       <Typography variant="h5" gutterBottom>
+//         Catering and Event Requests
+//       </Typography>
+//       <Typography variant="subtitle1" color="text.secondary" sx={{ mb: 2 }}>
+//         Total Requests: {cateringRequests.length}
+//       </Typography>
+
+//       {/* --- NEW: Grid Layout for Catering Cards --- */}
+//       <Grid container spacing={3}>
+//         {cateringRequests.length === 0 ? (
+//           <Grid item xs={12}>
+//             <Alert severity="info" sx={{ m: 2 }}>No catering requests pending review.</Alert>
+//           </Grid>
+//         ) : (
+//           cateringRequests.map((request) => {
+//             const isClosed = request.status === 'Completed' || request.status === 'Rejected';
+
+//             return (
+//               // Each card is a grid item. 2-up on 'md' screens
+//               <Grid item xs={12} md={6} key={request._id}>
+//                 <Card sx={getCardStyle(request.status)}>
+//                   <CardContent>
+//                     <Grid container spacing={2}>
+//                       {/* COLUMN 1: CONTACT & STATUS */}
+//                       <Grid item xs={12} sm={6}>
+//                         <Typography variant="body1" fontWeight="bold">Customer</Typography>
+//                         <Typography variant="subtitle1">{request.customerName}</Typography>
+//                         <Typography variant="body2" color="text.secondary">{request.customerPhone}</Typography>
+//                         <Typography variant="body2" color="text.secondary">{request.customerEmail}</Typography>
+//                         <Box sx={{ mt: 1 }}>
+//                           <Typography variant="body1" fontWeight="bold">Status:</Typography>
+//                           {renderStatus(request.status)}
+//                         </Box>
+//                       </Grid>
+
+//                       {/* COLUMN 2: EVENT DETAILS */}
+//                       <Grid item xs={12} sm={6}>
+//                         <Typography variant="body1" fontWeight="bold">Event Details</Typography>
+//                         <Typography variant="body2"><strong>Type:</strong> {request.eventType}</Typography>
+//                         <Typography variant="body2"><strong>Guests:</strong> {request.guestCount}</Typography>
+//                         <Typography variant="body2"><strong>Date:</strong> {new Date(request.eventDate).toLocaleDateString()}</Typography>
+//                         <Typography variant="body2"><strong>Time:</strong> {request.eventTime}</Typography>
+//                       </Grid>
+                      
+//                       {/* DIVIDER */}
+//                       <Grid item xs={12}><Divider sx={{ my: 1 }} /></Grid>
+
+//                       {/* COLUMN 3: VENUE & TOTAL */}
+//                       <Grid item xs={12} sm={6}>
+//                         <Typography variant="body1" fontWeight="bold">Venue</Typography>
+//                         <Typography variant="body2">{request.venueName}</Typography>
+//                         <Typography variant="body2" color="text.secondary" sx={{ mb: 1 }}>
+//                           {request.venueAddress}
+//                         </Typography>
+//                         <Typography variant="h6" color="primary">
+//                           Quote: ₹{request.estimatedTotal.toFixed(2)}
+//                         </Typography>
+//                       </Grid>
+
+//                       {/* COLUMN 4: MENU ITEMS */}
+//                       <Grid item xs={12} sm={6}>
+//                         <Typography variant="body1" fontWeight="bold">Menu Breakdown</Typography>
+//                         <List dense disablePadding sx={{ maxHeight: 150, overflowY: 'auto' }}>
+//                           {request.menuItems.map((item, index) => (
+//                             <ListItem key={index} disablePadding>
+//                               <ListItemText
+//                                 primary={`${item.quantity}x ${item.name}`}
+//                                 secondary={`@ ₹${item.pricePerUnit.toFixed(2)}`}
+//                               />
+//                             </ListItem>
+//                           ))}
+//                         </List>
+//                       </Grid>
+//                     </Grid>
+//                   </CardContent>
+
+//                   <CardActions sx={{ borderTop: '1px solid #eee', p: 2, backgroundColor: alpha(theme.palette.grey[500], 0.05) }}>
+//                     <Stack direction="row" spacing={1} flexWrap="wrap">
+//                       <Button size="small" variant="contained" color="success" onClick={() => handleUpdateStatus(request._id, 'Confirmed')} disabled={isClosed || request.status === 'Confirmed'}>
+//                         Confirm
+//                       </Button>
+//                       <Button size="small" variant="contained" color="info" onClick={() => handleUpdateStatus(request._id, 'Negotiating')} disabled={isClosed}>
+//                         Negotiating
+//                       </Button>
+//                       <Button size="small" variant="outlined" color="error" onClick={() => handleUpdateStatus(request._id, 'Rejected')} disabled={isClosed || request.status === 'Rejected'}>
+//                         Reject
+//                       </Button>
+//                       <Button size="small" variant="outlined" color="secondary" onClick={() => handleUpdateStatus(request._id, 'Completed')} disabled={request.status !== 'Confirmed'}>
+//                         Mark Complete
+//                       </Button>
+//                     </Stack>
+//                   </CardActions>
+//                 </Card>
+//               </Grid>
+//             );
+//           })
+//         )}
+//       </Grid>
+//     </Box>
+//   );
+// };
+// // ==========================================================
+// // --- END REFACTORED FUNCTION ---
+// // ==========================================================
+
+
+
+// // --- ✅ REFACTORED: Main Return Block (with Badges) ---
+//   return (
+//     <Container maxWidth="lg" sx={{ mt: 4, mb: 4 }}>
+      
+//       {/* 1. TOP HEADER & TAB CONTROL */}
+//       <Typography variant="h3" component="h1" gutterBottom textAlign="center">Admin Dashboard</Typography>
+      
+//       <Paper elevation={3} sx={{ mb: 3, p: 1, position: 'sticky', top: 80, zIndex: 1000 }}>
+//         <Tabs 
+//           value={activeTab} 
+//           onChange={handleTabChange} // <-- USE NEW HANDLER
+//           variant="scrollable" // Changed to scrollable for mobile
+//           scrollButtons="auto"
+//           allowScrollButtonsMobile
+//           indicatorColor="primary"
+//           textColor="primary"
+//         >
+//           {/* --- TAB 1 WITH BADGE --- */}
+//           <Tab label={
+//             <Badge badgeContent={newOrderCount} color="error" variant="dot">
+//               Order Wall (Live)
+//             </Badge>
+//           } />
+          
+//           <Tab label="Menu Management" />
+//           <Tab label="Customers" />
+//           <Tab label="Analytics" />
+          
+//           {/* --- TAB 5 WITH BADGE --- */}
+//           <Tab label={
+//              <Badge badgeContent={newCateringCount} color="error" variant="dot">
+//               Catering Requests
+//             </Badge>
+//           } />
+//         </Tabs>
+//       </Paper>
+      
+//       {/* 2. TAB CONTENT (Renders only the active view) */}
+//       <Paper elevation={3} sx={{ minHeight: '600px', p: 0 }}>
+//         {activeTab === 0 && renderOrderWall()}
+//         {activeTab === 1 && renderMenuAdmin()}
+//         {activeTab === 2 && renderCustomerList()}
+//         {activeTab === 3 && renderAnalytics()}
+//         {activeTab === 4 && renderCateringRequests()}
+//       </Paper>
+      
+//       {/* 3. RENDER THE EDIT MODAL (Unchanged) */}
+//       {isModalOpen && itemToEdit && (
+//           <EditItemModal 
+//             open={isModalOpen}
+//             item={itemToEdit}
+//             onClose={() => setIsModalOpen(false)}
+//             onUpdateSuccess={fetchMenuItems} // Re-fetch the menu list on success
+//             showSnackbar={showSnackbar}
+//           />
+//       )}
+
+//       {/* 4. RENDER THE CUSTOMER MODAL (Unchanged) */}
+//       <CustomerOrdersModal
+//         open={isCustomerModalOpen}
+//         onClose={() => setIsCustomerModalOpen(false)}
+//         customer={selectedCustomer}
+//         orders={customerOrders}
+//         loading={loadingCustomerOrders}
+//       />
+
+//     </Container>
+//   );
+// }
+// export default AdminPanel;
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+// In frontend/src/CustomerApp.js (FINAL CLEAN VERSION)
+
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import axios from 'axios';
+import { useNavigate, Link as RouterLink } from 'react-router-dom';
+
+import {
+  Container, Grid, Box, Card, CardContent, CardMedia,
+  Typography, Button, List, ListItem, ListItemText,
+  IconButton, Alert,
+  ListItemAvatar, Avatar, Paper, Tabs, Tab, TextField, Stack,
+  CircularProgress, Dialog, DialogTitle, DialogContent, DialogActions,
+  Checkbox, FormControlLabel, RadioGroup, Radio, FormControl, FormLabel, Divider,
+  InputLabel, Select, MenuItem ,useTheme,
+} from '@mui/material';
+import AddIcon from '@mui/icons-material/Add';
+import DeleteIcon from '@mui/icons-material/Delete'; 
+import StarIcon from '@mui/icons-material/Star'; 
+import SearchIcon from '@mui/icons-material/Search'; 
+import EditNoteIcon from '@mui/icons-material/EditNote'; 
+import HomeIcon from '@mui/icons-material/Home';
+import WorkIcon from '@mui/icons-material/Work';
+import LocationOnIcon from '@mui/icons-material/LocationOn';
+
+// Define API Base URL once
+const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || 'http://localhost:5001';
+
+
+
+
+
+
+
+
+
+
+// ===========================================
+// --- 🏠 UPDATED: Reusable Address Form Component ---
+// ===========================================
+const AddressForm = ({ onAddressAdded, customerToken, showSnackbar }) => {
+  const [addressType, setAddressType] = useState('Home');
+  const [street, setStreet] = useState('');
+  const [city, setCity] = useState('');
+  const [pincode, setPincode] = useState('');
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState('');
+  const theme = useTheme();
+
+  const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || 'http://localhost:5001';
+
+  const handleAddAddress = async (e) => {
+    e.preventDefault();
+    setError('');
+    
+    if (!street || !city || !pincode) {
+      setError("Please fill in all required fields.");
+      return;
+    }
+    
+    setLoading(true);
+    try {
+      const config = { headers: { 'Authorization': `Bearer ${customerToken}` } };
+      const body = { addressType, street, city, pincode };
+      const res = await axios.post(`${API_BASE_URL}/api/customers/me/addresses`, body, config);
+      
+      showSnackbar("New address saved!", "success");
+      setStreet('');
+      setCity('');
+      setPincode('');
+      setAddressType('Home');
+      
+      onAddressAdded(res.data);
+      
+    } catch (err) {
+      console.error("Error adding address:", err.response);
+      setError(err.response?.data?.Error || err.response?.data || "Could not save address.");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <Box 
+      component="form" 
+      onSubmit={handleAddAddress} 
+      sx={{ 
+        mt: 3,
+        p: 4,
+        borderRadius: 3,
+        border: `2px solid ${theme.palette.primary.main}33`,
+        background: theme.palette.mode === 'light'
+          ? 'linear-gradient(145deg, rgba(241, 196, 15, 0.05) 0%, rgba(243, 156, 18, 0.05) 100%)'
+          : 'linear-gradient(145deg, rgba(241, 196, 15, 0.08) 0%, rgba(243, 156, 18, 0.08) 100%)',
+        boxShadow: `0 8px 24px ${theme.palette.primary.main}15`,
+        animation: 'formSlideIn 0.5s ease-out',
+        '@keyframes formSlideIn': {
+          from: { opacity: 0, transform: 'translateY(20px)' },
+          to: { opacity: 1, transform: 'translateY(0)' }
+        }
+      }}
+    >
+      <Typography 
+        variant="h5" 
+        gutterBottom 
+        sx={{ 
+          fontWeight: 700,
+          color: 'text.primary',
+          mb: 3,
+          display: 'flex',
+          alignItems: 'center',
+          gap: 1,
+          background: theme.palette.mode === 'light'
+            ? 'linear-gradient(135deg, #F1C40F 0%, #F39C12 100%)'
+            : 'linear-gradient(135deg, #F1C40F 0%, #D4AC0D 100%)',
+          WebkitBackgroundClip: 'text',
+          WebkitTextFillColor: 'transparent',
+          backgroundClip: 'text',
+        }}
+      >
+        📍 Add New Address
+      </Typography>
+      
+      <Grid container spacing={3}>
+        {/* Address Type */}
+        <Grid item xs={12} sm={6}>
+          <FormControl fullWidth>
+            <InputLabel sx={{ fontWeight: 600 }}>Address Type</InputLabel>
+            <Select
+              value={addressType}
+              label="Address Type"
+              onChange={(e) => setAddressType(e.target.value)}
+              sx={{
+                borderRadius: 2,
+                '& .MuiOutlinedInput-notchedOutline': {
+                  borderColor: `${theme.palette.primary.main}33`,
+                },
+                '&:hover .MuiOutlinedInput-notchedOutline': {
+                  borderColor: theme.palette.primary.main,
+                },
+                '&.Mui-focused .MuiOutlinedInput-notchedOutline': {
+                  borderColor: theme.palette.primary.main,
+                  borderWidth: 2,
+                }
+              }}
+            >
+              <MenuItem value="Home">
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                  <HomeIcon fontSize="small" />
+                  Home
+                </Box>
+              </MenuItem>
+              <MenuItem value="Work">
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                  <WorkIcon fontSize="small" />
+                  Work
+                </Box>
+              </MenuItem>
+              <MenuItem value="Other">
+                <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                  <LocationOnIcon fontSize="small" />
+                  Other
+                </Box>
+              </MenuItem>
+            </Select>
+          </FormControl>
+        </Grid>
+        
+        {/* Street Address */}
+        <Grid item xs={12} sm={6}>
+          <TextField
+            label="Street Address"
+            fullWidth
+            required
+            value={street}
+            onChange={(e) => setStreet(e.target.value)}
+            sx={{
+              '& .MuiOutlinedInput-root': {
+                borderRadius: 2,
+                '& fieldset': {
+                  borderColor: `${theme.palette.primary.main}33`,
+                },
+                '&:hover fieldset': {
+                  borderColor: theme.palette.primary.main,
+                },
+                '&.Mui-focused fieldset': {
+                  borderColor: theme.palette.primary.main,
+                  borderWidth: 2,
+                }
+              }
+            }}
+          />
+        </Grid>
+        
+        {/* City */}
+        <Grid item xs={12} sm={6}>
+          <TextField
+            label="City"
+            fullWidth
+            required
+            value={city}
+            onChange={(e) => setCity(e.target.value)}
+            sx={{
+              '& .MuiOutlinedInput-root': {
+                borderRadius: 2,
+                '& fieldset': {
+                  borderColor: `${theme.palette.primary.main}33`,
+                },
+                '&:hover fieldset': {
+                  borderColor: theme.palette.primary.main,
+                },
+                '&.Mui-focused fieldset': {
+                  borderColor: theme.palette.primary.main,
+                  borderWidth: 2,
+                }
+              }
+            }}
+          />
+        </Grid>
+        
+        {/* Pincode */}
+        <Grid item xs={12} sm={6}>
+          <TextField
+            label="Pincode"
+            fullWidth
+            required
+            value={pincode}
+            onChange={(e) => setPincode(e.target.value)}
+            sx={{
+              '& .MuiOutlinedInput-root': {
+                borderRadius: 2,
+                '& fieldset': {
+                  borderColor: `${theme.palette.primary.main}33`,
+                },
+                '&:hover fieldset': {
+                  borderColor: theme.palette.primary.main,
+                },
+                '&.Mui-focused fieldset': {
+                  borderColor: theme.palette.primary.main,
+                  borderWidth: 2,
+                }
+              }
+            }}
+          />
+        </Grid>
+        
+        {/* Error Display */}
+        {error && (
+          <Grid item xs={12}>
+            <Alert 
+              severity="error" 
+              variant="outlined"
+              sx={{ 
+                borderRadius: 2,
+                border: `2px solid ${theme.palette.error.main}33`,
+                background: `linear-gradient(135deg, rgba(244, 67, 54, 0.05) 0%, rgba(229, 57, 53, 0.05) 100%)`,
+                '& .MuiAlert-icon': { fontSize: '1.5rem' }
+              }}
+            >
+              <Typography variant="body2" fontWeight="600">
+                {error}
+              </Typography>
+            </Alert>
+          </Grid>
+        )}
+        
+        {/* Submit Button */}
+        <Grid item xs={12}>
+          <Button 
+            type="submit" 
+            variant="contained" 
+            color="success"
+            fullWidth 
+            disabled={loading}
+            startIcon={loading ? <CircularProgress size={20} /> : <AddIcon />}
+            sx={{ 
+              py: 1.5,
+              borderRadius: 2,
+              fontWeight: 700,
+              fontSize: '1.1rem',
+              background: `linear-gradient(135deg, #4CAF50 0%, #2E7D32 100%)`,
+              boxShadow: '0 4px 12px rgba(76, 175, 80, 0.3)',
+              transition: 'all 0.3s ease',
+              '&:hover:not(:disabled)': {
+                transform: 'translateY(-2px)',
+                boxShadow: '0 8px 20px rgba(76, 175, 80, 0.4)',
+                background: `linear-gradient(135deg, #45a049 0%, #1B5E20 100%)`,
+              },
+              '&:disabled': {
+                background: `linear-gradient(135deg, #81C784 0%, #66BB6A 100%)`,
+              }
+            }}
+          >
+            {loading ? 'Saving Address...' : '💾 Save New Address'}
+          </Button>
+        </Grid>
+      </Grid>
+    </Box>
+  );
+};
+
+
+
+
+
+// ===========================================
+// 🚚 UPDATED Address Selection Modal 
+// ===========================================
+const AddressModal = ({ open, onClose, onSubmitOrder, customerToken, showSnackbar }) => {
+  const [addresses, setAddresses] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [selectedAddressId, setSelectedAddressId] = useState('');
+  const [showAddForm, setShowAddForm] = useState(false);
+  const [orderType, setOrderType] = useState('Delivery');
+  const theme = useTheme();
+  
+  const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || 'http://localhost:5001';
+
+  const getAuthConfig = useCallback(() => {
+    return { headers: { 'Authorization': `Bearer ${customerToken}` } };
+  }, [customerToken]);
+
+  useEffect(() => {
+    if (open) {
+      setLoading(true);
+      setShowAddForm(false);
+      setOrderType('Delivery');
+      
+      axios.get(`${API_BASE_URL}/api/customers/me/addresses`, getAuthConfig())
+        .then(res => {
+          setAddresses(res.data || []);
+          if (res.data && res.data.length > 0) {
+            setSelectedAddressId(res.data[0]._id);
+          } else {
+            setShowAddForm(true);
+          }
+        })
+        .catch(err => {
+          console.error("Error fetching addresses:", err);
+          showSnackbar("Could not load addresses.", "error");
+        })
+        .finally(() => setLoading(false));
+    }
+  }, [open, getAuthConfig, showSnackbar, API_BASE_URL]);
+
+  const handleAddressAdded = (newAddress) => {
+    setAddresses(prev => [newAddress, ...prev]);
+    setSelectedAddressId(newAddress._id);
+    setShowAddForm(false);
+  };
+
+  const handleSubmit = () => {
+    if (orderType === 'Pickup') {
+      onSubmitOrder({
+        orderType: 'Pickup',
+        deliveryAddress: null
+      });
+      return;
+    }
+    
+    if (orderType === 'Delivery') {
+      const selected = addresses.find(a => a._id === selectedAddressId);
+      if (selected) {
+        onSubmitOrder({
+          orderType: 'Delivery',
+          deliveryAddress: selected
+        });
+      } else {
+        showSnackbar("Please select a delivery address.", "error");
+      }
+    }
+  };
+
+  const getIcon = (type) => {
+    if (type === 'Work') return <WorkIcon fontSize="small" />;
+    if (type === 'Home') return <HomeIcon fontSize="small" />;
+    return <LocationOnIcon fontSize="small" />;
+  };
+
+  return (
+    <Dialog 
+      open={open} 
+      onClose={onClose} 
+      maxWidth="sm" 
+      fullWidth
+      sx={{
+        '& .MuiPaper-root': {
+          borderRadius: 4,
+          border: `2px solid ${theme.palette.primary.main}33`,
+          background: theme.palette.mode === 'light'
+            ? 'linear-gradient(145deg, #ffffff 0%, #fafafa 100%)'
+            : 'linear-gradient(145deg, #1a1a1a 0%, #2a2a2a 100%)',
+          boxShadow: theme.palette.mode === 'dark' 
+            ? '0 20px 60px rgba(0,0,0,0.5)'
+            : '0 20px 60px rgba(0,0,0,0.15)',
+          animation: 'modalSlideIn 0.4s cubic-bezier(0.4, 0, 0.2, 1)',
+          '@keyframes modalSlideIn': {
+            'from': { 
+              opacity: 0, 
+              transform: 'scale(0.8) translateY(20px)' 
+            },
+            'to': { 
+              opacity: 1, 
+              transform: 'scale(1) translateY(0)' 
+            }
+          },
+          overflow: 'hidden',
+        }
+      }}
+    >
+      {/* Header with Brand Gradient */}
+      <DialogTitle sx={{ 
+        background: `linear-gradient(135deg, ${theme.palette.primary.main} 0%, ${theme.palette.secondary.main} 100%)`,
+        color: '#000',
+        py: 3,
+        textAlign: 'center',
+        position: 'relative',
+        '&::after': {
+          content: '""',
+          position: 'absolute',
+          bottom: 0,
+          left: '10%',
+          right: '10%',
+          height: '2px',
+          background: 'rgba(255,255,255,0.3)',
+        }
+      }}>
+        <Typography variant="h4" component="h2" sx={{ 
+          fontWeight: 700,
+          textShadow: '1px 1px 2px rgba(0,0,0,0.1)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          gap: 2
+        }}>
+          🚀 Order Delivery Options
+        </Typography>
+      </DialogTitle>
+      
+      <DialogContent sx={{ p: 4 }}>
+        {/* Order Type Selection */}
+        <Box sx={{ mb: 4 }}>
+          <Typography variant="h6" gutterBottom sx={{ 
+            fontWeight: 600,
+            color: 'text.primary',
+            mb: 2,
+            display: 'flex',
+            alignItems: 'center',
+            gap: 1
+          }}>
+            📦 Select Order Type
+          </Typography>
+          <Paper sx={{ 
+            p: 3, 
+            borderRadius: 3,
+            background: theme.palette.mode === 'light'
+              ? 'linear-gradient(135deg, rgba(241, 196, 15, 0.05) 0%, rgba(243, 156, 18, 0.05) 100%)'
+              : 'linear-gradient(135deg, rgba(241, 196, 15, 0.08) 0%, rgba(243, 156, 18, 0.08) 100%)',
+            border: `2px solid ${theme.palette.primary.main}1A`
+          }}>
+            <RadioGroup
+              row
+              value={orderType}
+              onChange={(e) => setOrderType(e.target.value)}
+              sx={{ 
+                justifyContent: 'space-around',
+                '& .MuiFormControlLabel-root': {
+                  mx: 0,
+                  flex: 1
+                }
+              }}
+            >
+              <FormControlLabel 
+                value="Delivery" 
+                control={<Radio />} 
+                label={
+                  <Box sx={{ textAlign: 'center', p: 2 }}>
+                    <LocationOnIcon sx={{ fontSize: 32, color: 'primary.main', mb: 1 }} />
+                    <Typography variant="body1" fontWeight="600">Delivery</Typography>
+                    <Typography variant="caption" color="text.secondary">Get it delivered</Typography>
+                  </Box>
+                } 
+                sx={{ 
+                  borderRadius: 2,
+                  border: orderType === 'Delivery' ? `2px solid ${theme.palette.primary.main}` : `2px solid ${theme.palette.divider}`,
+                  background: orderType === 'Delivery' 
+                    ? `linear-gradient(135deg, ${theme.palette.primary.main}15 0%, ${theme.palette.secondary.main}15 100%)`
+                    : 'transparent',
+                  transition: 'all 0.3s ease',
+                  mx: 1
+                }}
+              />
+              <FormControlLabel 
+                value="Pickup" 
+                control={<Radio />} 
+                label={
+                  <Box sx={{ textAlign: 'center', p: 2 }}>
+                    <HomeIcon sx={{ fontSize: 32, color: 'primary.main', mb: 1 }} />
+                    <Typography variant="body1" fontWeight="600">Pickup</Typography>
+                    <Typography variant="caption" color="text.secondary">In-Store</Typography>
+                  </Box>
+                } 
+                sx={{ 
+                  borderRadius: 2,
+                  border: orderType === 'Pickup' ? `2px solid ${theme.palette.primary.main}` : `2px solid ${theme.palette.divider}`,
+                  background: orderType === 'Pickup' 
+                    ? `linear-gradient(135deg, ${theme.palette.primary.main}15 0%, ${theme.palette.secondary.main}15 100%)`
+                    : 'transparent',
+                  transition: 'all 0.3s ease',
+                  mx: 1
+                }}
+              />
+            </RadioGroup>
+          </Paper>
+        </Box>
+
+        {/* Delivery Address Section */}
+        {orderType === 'Delivery' && (
+          <Box sx={{ animation: 'fadeInUp 0.5s ease-out' }}>
+            <Typography variant="h6" gutterBottom sx={{ 
+              fontWeight: 600,
+              color: 'text.primary',
+              mb: 2,
+              display: 'flex',
+              alignItems: 'center',
+              gap: 1
+            }}>
+              🏠 Select Delivery Address
+            </Typography>
+            
+            {loading ? (
+              <Box sx={{ display: 'flex', justifyContent: 'center', my: 4 }}>
+                <CircularProgress size={40} />
+              </Box>
+            ) : (
+              <FormControl component="fieldset" fullWidth>
+                <RadioGroup value={selectedAddressId} onChange={(e) => setSelectedAddressId(e.target.value)}>
+                  <Stack spacing={2}>
+                    {addresses.map((addr, index) => (
+                      <Paper 
+                        key={addr._id} 
+                        elevation={0}
+                        sx={{ 
+                          p: 3, 
+                          display: 'flex', 
+                          alignItems: 'center', 
+                          gap: 2, 
+                          border: selectedAddressId === addr._id 
+                            ? `2px solid ${theme.palette.primary.main}`
+                            : `2px solid ${theme.palette.divider}`,
+                          background: selectedAddressId === addr._id
+                            ? `linear-gradient(135deg, ${theme.palette.primary.main}15 0%, ${theme.palette.secondary.main}15 100%)`
+                            : theme.palette.mode === 'light'
+                              ? 'linear-gradient(135deg, rgba(241, 196, 15, 0.03) 0%, rgba(243, 156, 18, 0.03) 100%)'
+                              : 'linear-gradient(135deg, rgba(241, 196, 15, 0.05) 0%, rgba(243, 156, 18, 0.05) 100%)',
+                          cursor: 'pointer',
+                          borderRadius: 3, 
+                          transition: 'all 0.3s ease',
+                          animation: `addressSlideIn 0.4s ease-out ${index * 0.1}s both`,
+                          '@keyframes addressSlideIn': {
+                            from: { opacity: 0, transform: 'translateX(-20px)' },
+                            to: { opacity: 1, transform: 'translateX(0)' }
+                          },
+                          '&:hover': {
+                            transform: 'translateY(-4px)',
+                            boxShadow: `0 8px 24px ${theme.palette.primary.main}15`,
+                            borderColor: theme.palette.primary.main,
+                          }
+                        }}
+                        onClick={() => setSelectedAddressId(addr._id)}
+                      >
+                        <Radio value={addr._id} />
+                        <Box sx={{ flex: 1 }}>
+                          <Typography variant="body1" sx={{ fontWeight: 'bold', display: 'flex', alignItems: 'center', gap: 1, mb: 0.5 }}>
+                            {getIcon(addr.addressType)} 
+                            {addr.addressType}
+                            <Typography variant="caption" color="primary.main" sx={{ ml: 1, fontWeight: 600 }}>
+                              {selectedAddressId === addr._id && '✓ Selected'}
+                            </Typography>
+                          </Typography>
+                          <Typography variant="body2" color="text.secondary">
+                            {addr.street}, {addr.city}, {addr.pincode}
+                          </Typography>
+                        </Box>
+                      </Paper>
+                    ))}
+                  </Stack>
+                </RadioGroup>
+              </FormControl>
+            )}
+
+               
+
+
+
+
+
+            {/* Add New Address Section */}
+            {!loading && (
+              showAddForm ? (
+                <Box sx={{ mt: 3 }}>
+                  <AddressForm 
+                    customerToken={customerToken}
+                    showSnackbar={showSnackbar}
+                    onAddressAdded={handleAddressAdded}
+                  />
+                </Box>
+              ) : (
+                <Button 
+                  onClick={() => setShowAddForm(true)} 
+                  startIcon={<AddIcon />} 
+                  fullWidth 
+                  variant="outlined" 
+                  sx={{ 
+                    mt: 3, 
+                    py: 1.5,
+                    borderRadius: 2,
+                    fontWeight: 600,
+                    fontSize: '1rem',
+                    border: `2px dashed ${theme.palette.primary.main}66`,
+                    color: 'primary.main',
+                    transition: 'all 0.3s ease',
+                    '&:hover': {
+                      border: `2px dashed ${theme.palette.primary.main}`,
+                      background: `linear-gradient(135deg, ${theme.palette.primary.main}08 0%, ${theme.palette.secondary.main}08 100%)`,
+                      transform: 'translateY(-2px)',
+                    }
+                  }}
+                >
+                  + Add New Address
+                </Button>
+              )
+            )}
+          </Box>
+        )}
+
+        {/* Pickup Message */}
+        {orderType === 'Pickup' && (
+          <Alert 
+            severity="info" 
+            sx={{ 
+              mt: 2, 
+              borderRadius: 3,
+              background: `linear-gradient(135deg, rgba(33, 150, 243, 0.1) 0%, rgba(21, 101, 192, 0.1) 100%)`,
+              border: `1px solid rgba(33, 150, 243, 0.3)`,
+              '& .MuiAlert-icon': { fontSize: '1.5rem' }
+            }}
+          >
+            <Typography variant="body1" fontWeight="600">
+              🏪 In-Store Pickup Selected
+            </Typography>
+            <Typography variant="body2">
+              Your order will be prepared for pickup at our store. You will not be charged any delivery fees.
+            </Typography>
+          </Alert>
+        )}
+      </DialogContent>
+
+      {/* Action Buttons */}
+      <DialogActions sx={{ 
+        p: 3, 
+        borderTop: `1px solid ${theme.palette.divider}`,
+        background: theme.palette.mode === 'light'
+          ? 'linear-gradient(135deg, rgba(241, 196, 15, 0.05) 0%, rgba(243, 156, 18, 0.05) 100%)'
+          : 'linear-gradient(135deg, rgba(241, 196, 15, 0.08) 0%, rgba(243, 156, 18, 0.08) 100%)',
+      }}>
+        <Button 
+          onClick={onClose} 
+          variant="outlined" 
+          color="secondary"
+          sx={{ 
+            borderRadius: 2,
+            px: 4,
+            py: 1,
+            fontWeight: 600,
+            fontSize: '1rem',
+            transition: 'all 0.3s ease',
+            '&:hover': {
+              transform: 'translateY(-2px)',
+              boxShadow: `0 4px 12px ${theme.palette.secondary.main}33`
+            }
+          }}
+        >
+          Cancel
+        </Button>
+        <Button 
+          onClick={handleSubmit} 
+          variant="contained" 
+          color="success"
+          disabled={loading || (orderType === 'Delivery' && !selectedAddressId)}
+          sx={{ 
+            borderRadius: 2,
+            px: 4,
+            py: 1,
+            fontWeight: 700,
+            fontSize: '1rem',
+            background: `linear-gradient(135deg, #4CAF50 0%, #2E7D32 100%)`,
+            boxShadow: '0 4px 12px rgba(76, 175, 80, 0.3)',
+            transition: 'all 0.3s ease',
+            '&:hover:not(:disabled)': {
+              transform: 'translateY(-2px)',
+              boxShadow: '0 8px 20px rgba(76, 175, 80, 0.4)',
+              background: `linear-gradient(135deg, #45a049 0%, #1B5E20 100%)`,
+            }
+          }}
+        >
+          ✅ Confirm & Place Order
+        </Button>
+      </DialogActions>
+    </Dialog>
+  );
+};
+
+
+
+
+// ===========================================
+// 📦 UPDATED Customization MODAL Component 
+// ===========================================
+const CustomizeModal = ({ item, open, onClose, onCustomize }) => {
+  const itemData = item || {};
+  const [selections, setSelections] = useState({});
+  const theme = useTheme();
+
+  useEffect(() => {
+    if (!itemData.modifiers) return;
+    const initialSelections = {};
+    itemData.modifiers.forEach((group) => {
+      if (group.selectionType === 'single' && group.options.length > 0) {
+        const defaultOption = group.options.find(opt => opt.price === 0) || group.options[0];
+        initialSelections[group.groupName] = defaultOption;
+      } else {
+        initialSelections[group.groupName] = [];
+      }
+    });
+    setSelections(initialSelections);
+  }, [itemData]);
+
+  const priceAdjustment = useMemo(() => {
+    if (Object.keys(selections).length === 0) return 0;
+    return Object.values(selections).reduce((total, selection) => {
+      if (Array.isArray(selection)) {
+        return total + selection.reduce((sum, opt) => sum + opt.price, 0);
+      } else if (selection && selection.price !== undefined) {
+        return total + selection.price;
+      }
+      return total;
+    }, 0);
+  }, [selections]);
+
+  const basePrice = itemData.price || 0;
+  const finalPrice = basePrice + priceAdjustment;
+
+  const handleSelectionChange = (groupName, option) => {
+    setSelections((prev) => {
+      const currentSelection = prev[groupName];
+      const group = itemData.modifiers.find((g) => g.groupName === groupName);
+
+      if (group.selectionType === 'single') {
+        return { ...prev, [groupName]: option };
+      } else {
+        const isSelected = currentSelection.some((o) => o.name === option.name);
+        if (isSelected) {
+          return {
+            ...prev,
+            [groupName]: currentSelection.filter((o) => o.name !== option.name),
+          };
+        } else {
+          return { ...prev, [groupName]: [...currentSelection, option] };
+        }
+      }
+    });
+  };
+
+  const handleConfirm = () => {
+    const customizationDetails = Object.keys(selections)
+      .map((groupName) => {
+        const selection = selections[groupName];
+        if (Array.isArray(selection)) {
+          return { groupName, selectedOptions: selection };
+        } else if (selection) {
+          return { groupName, selectedOptions: [selection] };
+        }
+        return { groupName, selectedOptions: [] };
+      })
+      .filter((d) => d.selectedOptions.length > 0);
+
+    onCustomize({
+      ...item,
+      price: finalPrice,
+      customization: customizationDetails,
+    });
+  };
+
+  return (
+    <Dialog 
+      open={open} 
+      onClose={onClose} 
+      maxWidth="sm" 
+      fullWidth
+      sx={{
+        '& .MuiPaper-root': {
+          borderRadius: 4,
+          border: `2px solid ${theme.palette.primary.main}33`,
+          background: theme.palette.mode === 'light'
+            ? 'linear-gradient(145deg, #ffffff 0%, #fafafa 100%)'
+            : 'linear-gradient(145deg, #1a1a1a 0%, #2a2a2a 100%)',
+          boxShadow: theme.palette.mode === 'dark' 
+            ? '0 20px 60px rgba(0,0,0,0.5)'
+            : '0 20px 60px rgba(0,0,0,0.15)',
+          animation: 'modalSlideIn 0.4s cubic-bezier(0.4, 0, 0.2, 1)',
+          '@keyframes modalSlideIn': {
+            'from': { 
+              opacity: 0, 
+              transform: 'scale(0.8) translateY(20px)' 
+            },
+            'to': { 
+              opacity: 1, 
+              transform: 'scale(1) translateY(0)' 
+            }
+          },
+          overflow: 'hidden',
+        }
+      }}
+    >
+      {/* Header with Brand Gradient */}
+      <DialogTitle sx={{ 
+        background: `linear-gradient(135deg, ${theme.palette.primary.main} 0%, ${theme.palette.secondary.main} 100%)`,
+        color: '#000',
+        py: 3,
+        textAlign: 'center',
+        position: 'relative',
+        '&::after': {
+          content: '""',
+          position: 'absolute',
+          bottom: 0,
+          left: '10%',
+          right: '10%',
+          height: '2px',
+          background: 'rgba(255,255,255,0.3)',
+        }
+      }}>
+        <Typography variant="h4" component="h2" sx={{ 
+          fontWeight: 700,
+          textShadow: '1px 1px 2px rgba(0,0,0,0.1)',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'center',
+          gap: 2
+        }}>
+          🎯 Customize {itemData.name || 'Item'}
+        </Typography>
+      </DialogTitle>
+      
+      <DialogContent sx={{ p: 4, '&::-webkit-scrollbar': { width: 8 }, '&::-webkit-scrollbar-thumb': { backgroundColor: theme.palette.primary.main, borderRadius: 4 } }}>
+        <Stack spacing={4}>
+          {/* Price Display */}
+          <Box sx={{ 
+            display: 'flex', 
+            justifyContent: 'space-between', 
+            alignItems: 'center',
+            p: 3,
+            borderRadius: 3,
+            background: theme.palette.mode === 'light'
+              ? 'linear-gradient(135deg, rgba(241, 196, 15, 0.1) 0%, rgba(243, 156, 18, 0.1) 100%)'
+              : 'linear-gradient(135deg, rgba(241, 196, 15, 0.15) 0%, rgba(243, 156, 18, 0.15) 100%)',
+            border: `1px solid ${theme.palette.primary.main}33`,
+          }}>
+            <Box>
+              <Typography variant="body2" color="text.secondary">Base Price</Typography>
+              <Typography variant="h5" fontWeight="600">₹{basePrice.toFixed(2)}</Typography>
+            </Box>
+            <Box sx={{ textAlign: 'right' }}>
+              <Typography variant="body2" color="text.secondary">Total</Typography>
+              <Typography variant="h4" fontWeight="700" color="primary.main">
+                ₹{finalPrice.toFixed(2)}
+              </Typography>
+            </Box>
+          </Box>
+
+          {/* Customization Options */}
+          {itemData.modifiers && itemData.modifiers.map((group, groupIndex) => (
+            <Box 
+              key={group.groupName}
+              sx={{
+                animation: `fadeInUp 0.5s ease-out ${groupIndex * 0.1}s both`,
+                '@keyframes fadeInUp': {
+                  from: { opacity: 0, transform: 'translateY(20px)' },
+                  to: { opacity: 1, transform: 'translateY(0)' }
+                }
+              }}
+            >
+              <FormControl component="fieldset" fullWidth>
+                <FormLabel component="legend" sx={{ 
+                  fontSize: '1.2rem', 
+                  fontWeight: '700',
+                  color: 'text.primary',
+                  mb: 2,
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 1
+                }}>
+                  <span>⚡</span>
+                  {group.groupName}
+                  <Typography variant="caption" color="primary.main" sx={{ ml: 1, fontSize: '0.8rem' }}>
+                    {group.selectionType === 'single' ? '(Select one)' : '(Select any number)'}
+                  </Typography>
+                </FormLabel>
+                
+                <Box sx={{ 
+                  p: 3, 
+                  border: `2px solid ${theme.palette.primary.main}1A`, 
+                  borderRadius: 3, 
+                  background: theme.palette.mode === 'light'
+                    ? 'linear-gradient(135deg, rgba(241, 196, 15, 0.05) 0%, rgba(243, 156, 18, 0.05) 100%)'
+                    : 'linear-gradient(135deg, rgba(241, 196, 15, 0.08) 0%, rgba(243, 156, 18, 0.08) 100%)',
+                  transition: 'all 0.3s ease',
+                  '&:hover': {
+                    borderColor: `${theme.palette.primary.main}33`,
+                    transform: 'translateY(-2px)',
+                    boxShadow: `0 8px 24px ${theme.palette.primary.main}15`
+                  }
+                }}>
+                  {group.selectionType === 'single' ? (
+                    <RadioGroup
+                      value={selections[group.groupName]?.name || ''}
+                      onChange={(e) => {
+                        const selectedOption = group.options.find((o) => o.name === e.target.value);
+                        handleSelectionChange(group.groupName, selectedOption);
+                      }}
+                    >
+                      <Grid container spacing={2}>
+                        {group.options.map((option, optIndex) => (
+                          <Grid item xs={12} sm={6} key={option.name}>
+                            <Paper 
+                              elevation={0}
+                              sx={{
+                                p: 2,
+                                borderRadius: 2,
+                                border: `2px solid ${
+                                  selections[group.groupName]?.name === option.name 
+                                    ? theme.palette.primary.main 
+                                    : theme.palette.divider
+                                }`,
+                                background: selections[group.groupName]?.name === option.name
+                                  ? `linear-gradient(135deg, ${theme.palette.primary.main}15 0%, ${theme.palette.secondary.main}15 100%)`
+                                  : 'transparent',
+                                cursor: 'pointer',
+                                transition: 'all 0.3s ease',
+                                '&:hover': {
+                                  borderColor: theme.palette.primary.main,
+                                  transform: 'scale(1.02)',
+                                },
+                                animation: `optionSlideIn 0.4s ease-out ${optIndex * 0.05}s both`,
+                                '@keyframes optionSlideIn': {
+                                  from: { opacity: 0, transform: 'translateX(-10px)' },
+                                  to: { opacity: 1, transform: 'translateX(0)' }
+                                }
+                              }}
+                              onClick={() => handleSelectionChange(group.groupName, option)}
+                            >
+                              <FormControlLabel
+                                value={option.name}
+                                control={<Radio size="small" />}
+                                label={
+                                  <Box>
+                                    <Typography variant="body1" fontWeight="600">
+                                      {option.name}
+                                    </Typography>
+                                    <Typography variant="body2" color="primary.main" fontWeight="600">
+                                      +₹{option.price.toFixed(2)}
+                                    </Typography>
+                                  </Box>
+                                }
+                                sx={{ width: '100%', m: 0 }}
+                              />
+                            </Paper>
+                          </Grid>
+                        ))}
+                      </Grid>
+                    </RadioGroup>
+                  ) : (
+                    <Grid container spacing={2}>
+                      {group.options.map((option, optIndex) => (
+                        <Grid item xs={12} sm={6} key={option.name}>
+                          <Paper 
+                            elevation={0}
+                            sx={{
+                              p: 2,
+                              borderRadius: 2,
+                              border: `2px solid ${
+                                selections[group.groupName]?.some(o => o.name === option.name)
+                                  ? theme.palette.primary.main 
+                                  : theme.palette.divider
+                              }`,
+                              background: selections[group.groupName]?.some(o => o.name === option.name)
+                                ? `linear-gradient(135deg, ${theme.palette.primary.main}15 0%, ${theme.palette.secondary.main}15 100%)`
+                                : 'transparent',
+                              cursor: 'pointer',
+                              transition: 'all 0.3s ease',
+                              '&:hover': {
+                                borderColor: theme.palette.primary.main,
+                                transform: 'scale(1.02)',
+                              },
+                              animation: `optionSlideIn 0.4s ease-out ${optIndex * 0.05}s both`,
+                            }}
+                            onClick={() => handleSelectionChange(group.groupName, option)}
+                          >
+                            <FormControlLabel
+                              control={
+                                <Checkbox
+                                  checked={selections[group.groupName]?.some(o => o.name === option.name) || false}
+                                  onChange={() => handleSelectionChange(group.groupName, option)}
+                                  size="small"
+                                />
+                              }
+                              label={
+                                <Box>
+                                  <Typography variant="body1" fontWeight="600">
+                                    {option.name}
+                                  </Typography>
+                                  <Typography variant="body2" color="primary.main" fontWeight="600">
+                                    +₹{option.price.toFixed(2)}
+                                  </Typography>
+                                </Box>
+                              }
+                              sx={{ width: '100%', m: 0 }}
+                            />
+                          </Paper>
+                        </Grid>
+                      ))}
+                    </Grid>
+                  )}
+                </Box>
+              </FormControl>
+            </Box>
+          ))}
+        </Stack>
+      </DialogContent>
+
+      {/* Action Buttons */}
+      <DialogActions sx={{ 
+        p: 3, 
+        borderTop: `1px solid ${theme.palette.divider}`,
+        background: theme.palette.mode === 'light'
+          ? 'linear-gradient(135deg, rgba(241, 196, 15, 0.05) 0%, rgba(243, 156, 18, 0.05) 100%)'
+          : 'linear-gradient(135deg, rgba(241, 196, 15, 0.08) 0%, rgba(243, 156, 18, 0.08) 100%)',
+      }}>
+        <Button 
+          onClick={onClose} 
+          variant="outlined" 
+          color="secondary"
+          sx={{ 
+            borderRadius: 2,
+            px: 4,
+            py: 1,
+            fontWeight: 600,
+            fontSize: '1rem',
+            transition: 'all 0.3s ease',
+            '&:hover': {
+              transform: 'translateY(-2px)',
+              boxShadow: `0 4px 12px ${theme.palette.secondary.main}33`
+            }
+          }}
+        >
+          Cancel
+        </Button>
+        <Button 
+          onClick={handleConfirm} 
+          variant="contained" 
+          color="success"
+          sx={{ 
+            borderRadius: 2,
+            px: 4,
+            py: 1,
+            fontWeight: 700,
+            fontSize: '1rem',
+            background: `linear-gradient(135deg, #4CAF50 0%, #2E7D32 100%)`,
+            boxShadow: '0 4px 12px rgba(76, 175, 80, 0.3)',
+            transition: 'all 0.3s ease',
+            '&:hover': {
+              transform: 'translateY(-2px)',
+              boxShadow: '0 8px 20px rgba(76, 175, 80, 0.4)',
+              background: `linear-gradient(135deg, #45a049 0%, #1B5E20 100%)`,
+            }
+          }}
+        >
+          🛒 Add to Order - ₹{finalPrice.toFixed(2)}
+        </Button>
+      </DialogActions>
+    </Dialog>
+  );
+};
+
+
+
+
+
+// ===========================================
+// 🍔 CustomerApp MAIN Component
+// ===========================================
+
+    // State - ONLY ONE SET OF STATE DECLARATIONS
+function CustomerApp({ customerToken, customerName, showSnackbar }) {
+
+  const [menu, setMenu] = useState([]);
+  const [cart, setCart] = useState([]);
+  const [featuredItems, setFeaturedItems] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(''); // ✅ ADD THIS
+  const navigate = useNavigate();
+
+  // Customization Modal State
+  const [customizationModalOpen, setCustomizationModalOpen] = useState(false);
+  const [itemToCustomize, setItemToCustomize] = useState(null);
+  
+  // Note Modal State
+  const [noteModalOpen, setNoteModalOpen] = useState(false);
+  const [currentItemForNote, setCurrentItemForNote] = useState(null);
+  const [currentNoteText, setCurrentNoteText] = useState("");
+
+  // Address Modal State
+  const [isAddressModalOpen, setIsAddressModalOpen] = useState(false);
+  //const API_BASE_URL = process.env.REACT_APP_API_BASE_URL || 'http://localhost:5001';
+
+
+
+  // Fix image URL helper function
+  const getImageUrl = (imagePath) => {
+    if (!imagePath) {
+      return 'https://via.placeholder.com/200x150/FFD700/000000?text=No+Image';
+    }
+    
+    // If it's already a full URL, return as is
+    if (imagePath.startsWith('http')) return imagePath;
+    
+    // If it starts with /, it's relative to the domain
+    if (imagePath.startsWith('/')) {
+      return `${API_BASE_URL}${imagePath}`;
+    }
+    
+    // Otherwise, assume it's relative to API base
+    return `${API_BASE_URL}/${imagePath}`;
+  };
+
+  // Auth Config helper
+  const getAuthConfig = useCallback(() => {
+    return { headers: { 'Authorization': `Bearer ${customerToken}` } };
+  }, [customerToken]);
+
+  // Filter State
+  const [categories, setCategories] = useState(['All']);
+  const [selectedCategory, setSelectedCategory] = useState('All');
+  const [searchTerm, setSearchTerm] = useState('');
+
+  // --- Fetching Logic ---
+  // --- FIXED Fetching Logic ---
+  const fetchMenu = useCallback(() => {
+  setLoading(true);
+  setError(''); // Clear previous errors
+  
+  console.log('🔍 Fetching menu from:', `${API_BASE_URL}/api/menu`);
+  
+  axios.get(`${API_BASE_URL}/api/menu`) // ✅ CORRECT ENDPOINT
+    .then((res) => {
+      console.log('✅ Menu API Response:', res.data);
+      
+      // Your data comes as a direct array, so use it directly
+      if (Array.isArray(res.data)) {
+        setMenu(res.data);
+        console.log('📦 Loaded menu items:', res.data.length);
+        
+        // Log first item to verify structure
+        if (res.data[0]) {
+          console.log('📝 Sample item:', {
+            name: res.data[0].name,
+            price: res.data[0].price,
+            category: res.data[0].category,
+            imageUrl: res.data[0].imageUrl,
+            inStock: res.data[0].inStock
+          });
+        }
+      } else {
+        throw new Error('Menu data is not an array');
+      }
+      setLoading(false);
+    })
+    .catch((err) => {
+      console.error("❌ Error fetching menu:", err);
+      const errorMsg = err.response?.data?.message || err.message || 'Failed to load menu';
+      setError(errorMsg);
+      setLoading(false);
+      showSnackbar(errorMsg, 'error');
+    });
+}, [API_BASE_URL, showSnackbar]);
+
+  const fetchCategories = useCallback(() => {
+  axios.get(`${API_BASE_URL}/api/menu/categories`)
+    .then((res) => {
+      console.log('✅ Categories API Response:', res.data);
+      // Your categories already include 'All', so use directly
+      if (Array.isArray(res.data)) {
+        setCategories(res.data);
+      }
+    })
+    .catch((err) => {
+      console.error("❌ Error fetching categories:", err);
+      // Fallback: extract categories from menu items
+      if (menu.length > 0) {
+        const categoriesFromMenu = ['All', ...new Set(menu.map(item => item.category).filter(Boolean))];
+        setCategories(categoriesFromMenu);
+      }
+    });
+}, [API_BASE_URL, menu]);
+
+
+const fetchFeaturedItems = useCallback(() => {
+  axios.get(`${API_BASE_URL}/api/menu/featured`)
+    .then((res) => {
+      console.log('✅ Featured Items API Response:', res.data);
+      setFeaturedItems(res.data);
+    })
+    .catch((err) => {
+      console.error("❌ Error fetching featured items:", err);
+      // Fallback: use first few menu items as featured
+      if (menu.length > 0) {
+        setFeaturedItems(menu.slice(0, 3));
+      }
+    });
+}, [API_BASE_URL, menu]);
+
+
+// --- Cart Logic ---
+const handleAddToCart = (itemToAdd) => {
+  if (itemToAdd.modifiers && itemToAdd.modifiers.length > 0) {
+    setItemToCustomize(itemToAdd);
+    setCustomizationModalOpen(true);
+    return;
+  }
+  
+  setCart((prevCart) => {
+    const existingItemIndex = prevCart.findIndex((item) => 
+      item._id === itemToAdd._id && !item.customization
+    );
+    
+    if (existingItemIndex > -1) {
+      return prevCart.map((item, index) =>
+        index === existingItemIndex ? { ...item, quantity: item.quantity + 1 } : item
+      );
+    } else {
+      return [...prevCart, { ...itemToAdd, quantity: 1, note: '' }];
+    }
+  });
+  
+  showSnackbar(`${itemToAdd.name} added to cart!`, 'success');
+};
+
+
+
+
+  // --- Effects ---
+  useEffect(() => {
+    fetchMenu(); // Fetch menu first
+  }, []); // Remove dependencies to fetch only once on mount
+
+  useEffect(() => {
+    // After menu is loaded, fetch categories and featured items
+    if (menu.length > 0) {
+      fetchCategories();
+      fetchFeaturedItems();
+    }
+  }, [menu, fetchCategories, fetchFeaturedItems]);
+
+  // Filter menu based on category and search
+  useEffect(() => {
+    const handler = setTimeout(() => {
+      if (selectedCategory === 'All' && !searchTerm.trim()) {
+        // If no filters, show all menu items
+        return;
+      }
+      
+      // You can add client-side filtering here if needed
+      // But it's better to handle filtering in the fetchMenu function
+    }, 300);
+    
+    return () => clearTimeout(handler);
+  }, [selectedCategory, searchTerm]);
+  
+
+  // --- Cart Logic ---
+  const addSimpleItemToCart = (itemToAdd) => {
+    if (itemToAdd.modifiers && itemToAdd.modifiers.length > 0) {
+        setItemToCustomize(itemToAdd);
+        setCustomizationModalOpen(true);
+        return; 
+    }
+    setCart((prevCart) => {
+        const existingItemIndex = prevCart.findIndex((item) => item._id === itemToAdd._id && !item.customization);
+        if (existingItemIndex > -1) {
+            return prevCart.map((item, index) =>
+                index === existingItemIndex ? { ...item, quantity: item.quantity + 1 } : item
+            );
+        } else {
+            return [...prevCart, { ...itemToAdd, quantity: 1, note: '' }];
+        }
+    });
+    showSnackbar(`${itemToAdd.name} added to cart!`, 'success');
+  };
+  
+  const handleItemCustomized = (customizedItem) => {
+    setCart((prevCart) => {
+      return [...prevCart, { 
+        ...customizedItem, 
+        cartId: Date.now() + Math.random(), 
+        quantity: 1, 
+        note: '', 
+      }];
+    });
+    setCustomizationModalOpen(false);
+    showSnackbar(`${customizedItem.name} added to cart!`, 'success');
+  };
+  
+  const handleQuantityChange = (itemId, change) => {
+     setCart((prevCart) => {
+       return prevCart.map((item) => {
+        const idToCheck = item.cartId || item._id;
+        if (idToCheck === itemId) {
+           const newQuantity = item.quantity + change;
+           return newQuantity > 0 ? { ...item, quantity: newQuantity } : null; 
+         }
+         return item;
+       }).filter(item => item !== null); 
+     });
+  };
+  
+  const handleRemoveItem = (itemId) => {
+    setCart((prevCart) => prevCart.filter((item) => (item.cartId || item._id) !== itemId));
+  };
+  // --- END CART LOGIC ---
+
+  // --- Note Modal Handlers ---
+  const openNoteModal = (item) => {
+    setCurrentItemForNote(item);
+    setCurrentNoteText(item.note || ''); 
+    setNoteModalOpen(true);
+  };
+  
+  const closeNoteModal = () => {
+    setNoteModalOpen(false);
+    setCurrentItemForNote(null);
+    setCurrentNoteText("");
+  };
+  
+  const handleSaveNote = () => {
+    setCart(prevCart => 
+      prevCart.map(item => 
+        (item.cartId || item._id) === (currentItemForNote.cartId || currentItemForNote._id)
+          ? { ...item, note: currentNoteText } 
+          : item
+      )
+    );
+    showSnackbar(`Note saved for ${currentItemForNote.name}`, 'success');
+    closeNoteModal();
+  };
+  // --- END NOTE HANDLERS ---
+
+  // Calculate Total Price
+  const getTotalPrice = () => { return cart.reduce((total, item) => total + (item.price * item.quantity), 0); };
+
+  // Group Menu By Categories
+  const menuByCategories = menu.reduce((acc, item) => {
+    const category = item.category || 'Uncategorized';
+    if (!acc[category]) { 
+      acc[category] = []; 
+    }
+    acc[category].push(item);
+    return acc;
+  }, {});
+
+  // --- Order Submission Logic ---
+  const handleSubmitOrder = (e) => {
+    e.preventDefault();
+    if (!customerToken) {
+      navigate('/customer/login', { state: { from: 'checkout' } });
+      return;
+    }
+    if (cart.length === 0) {
+      showSnackbar("Your cart is empty!", "warning");
+      return;
+    }
+    setIsAddressModalOpen(true);
+  };
+
+  // Finalize Order Submission
+  const handleFinalizeOrder = (orderData) => {
+    
+    // 1. Create the secure payload
+    const newOrder = {
+      orderType: orderData.orderType,
+
+      deliveryAddress: orderData.orderType === 'Delivery' ? {
+        street: orderData.deliveryAddress.street,
+        city: orderData.deliveryAddress.city,
+        pincode: orderData.deliveryAddress.pincode,
+      } : undefined,
+      
+      items: cart.map(item => {
+        const selectedModifiers = (item.customization || []).flatMap(group => 
+          group.selectedOptions.map(option => ({
+            name: option.name,
+            price: option.price
+          }))
+        );
+        return {
+          menuItemId: item._id, 
+          quantity: item.quantity,
+          note: item.note || '',
+          selectedModifiers: selectedModifiers 
+        };
+      })
+    };
+    
+    const config = getAuthConfig();
+
+    axios.post(`${API_BASE_URL}/api/orders/add`, newOrder, config)
+      .then((res) => {
+        showSnackbar(`Order placed! Your Order ID is ${res.data.orderId}`, "success");
+        setCart([]); 
+        setIsAddressModalOpen(false); 
+      })
+      .catch((err) => {
+        console.error("Order submission error:", err);
+        const errorData = err.response?.data;
+        let errorMsg = errorData?.Error || errorData || "Error placing order";
+        
+        if (err.response && (err.response.status === 401 || err.response.status === 403)) {
+           showSnackbar("Authentication error. Please log in again.", "error");
+        } else if (typeof errorData === 'string' && errorData.includes('Validation Error')) {
+           showSnackbar('Validation Error: Please check your order details.', 'error');
+        } else {
+           showSnackbar(errorMsg, "error");
+        }
+      });
+  };
+
+  // --- RENDER HELPERS ---
+  const handleOpenCustomization = (item) => {
+    if (item.modifiers && item.modifiers.length > 0) {
+      setItemToCustomize(item);
+      setCustomizationModalOpen(true);
+    } else {
+      addSimpleItemToCart(item);
+    }
+  }
+  
+  const getCustomizationSummary = (item) => {
+    if (!item.customization || item.customization.length === 0) return null;
+    const summaries = item.customization.flatMap(group => {
+        return group.selectedOptions.map(option => option.name);
+    });
+    return summaries.join(', ');
+  }
+
+ 
+
+
+
+
+
+return (
+    <Container maxWidth="lg" sx={{ mt: 4, mb: 4 }}>
+
+
+
+  {/* DEBUG SECTION - Remove in production */}
+    <Box sx={{ mb: 2, p: 2, bgcolor: 'grey.100', borderRadius: 1 }}>
+      <Typography variant="h6">Debug Info:</Typography>
+      <Typography>Loading: {loading ? 'Yes' : 'No'}</Typography>
+      <Typography>Menu Items: {menu.length}</Typography>
+      <Typography>Error: {error || 'None'}</Typography>
+      <Typography>API Base: {API_BASE_URL}</Typography>
+      <Button 
+        variant="outlined" 
+        onClick={fetchMenu}
+        size="small"
+        sx={{ mt: 1 }}
+      >
+        Refresh Menu
+      </Button>
+    </Box>
+      
+      {/* Hero Section */}
+      <Box sx={{ 
+        textAlign: 'center', 
+        mb: 4, 
+        py: { xs: 4, md: 6 }, 
+        px: { xs: 2, md: 4 },
+        background: (theme) => theme.palette.mode === 'light' 
+          ? 'linear-gradient(135deg, #F1C40F 0%, #F39C12 50%, #E67E22 100%)'
+          : 'linear-gradient(135deg, #F1C40F 0%, #D4AC0D 50%, #F39C12 100%)',
+        color: '#000',
+        borderRadius: { xs: 3, md: 5 },
+        boxShadow: (theme) => theme.palette.mode === 'light' 
+          ? '0 8px 32px rgba(241, 196, 15, 0.3)'
+          : '0 8px 32px rgba(241, 196, 15, 0.2)',
+        position: 'relative',
+        overflow: 'hidden',
+        '&::before': {
+          content: '""',
+          position: 'absolute',
+          top: 0,
+          left: 0,
+          right: 0,
+          bottom: 0,
+          background: 'radial-gradient(circle at 30% 50%, rgba(255,255,255,0.1) 0%, transparent 50%)',
+          pointerEvents: 'none',
+        },
+        animation: 'fadeInUp 0.8s ease-out',
+        '@keyframes fadeInUp': {
+          from: {
+            opacity: 0,
+            transform: 'translateY(30px)',
+          },
+          to: {
+            opacity: 1,
+            transform: 'translateY(0)',
+          },
+        },
+      }}>
+        <Typography 
+          variant="h2" 
+          component="h1" 
+          gutterBottom 
+          sx={{
+            fontWeight: 700,
+            fontSize: { xs: '2rem', sm: '2.5rem', md: '3.5rem' },
+            textShadow: '2px 2px 4px rgba(0,0,0,0.1)',
+            position: 'relative',
+            zIndex: 1,
+            animation: 'pulse 2s ease-in-out infinite',
+            '@keyframes pulse': {
+              '0%, 100%': { transform: 'scale(1)' },
+              '50%': { transform: 'scale(1.02)' },
+            },
+          }}
+        >
+          Welcome to Grace Dabeli Centre
+        </Typography>
+        <Typography 
+          variant="h5" 
+          component="h2" 
+          sx={{
+            color: '#1a1a1a',
+            fontSize: { xs: '1rem', sm: '1.25rem', md: '1.5rem' },
+            fontWeight: 400,
+            position: 'relative',
+            zIndex: 1,
+            mt: 1.5,
+          }}
+        >
+          Fresh, Hot, and Authentic. Place your order below! ✨
+        </Typography>
+      </Box>
+
+      {/* --- FEATURED ITEMS SECTION --- */}
+      {featuredItems.length > 0 && selectedCategory === 'All' && searchTerm === '' && (
+          <Box sx={{ mb: 4 }}>
+            <Typography variant="h5" gutterBottom sx={{ 
+              display: 'flex', 
+              alignItems: 'center', 
+              borderBottom: '2px solid', 
+              borderColor: 'primary.main', 
+              pb: 1, 
+              color: 'text.primary',
+              fontSize: { xs: '1.25rem', md: '1.5rem' },
+              mb: 2
+            }}>
+                <StarIcon color="primary" sx={{ 
+                  mr: 1, 
+                  animation: 'twinkle 2s ease-in-out infinite',
+                  '@keyframes twinkle': {
+                    '0%, 100%': { opacity: 1, transform: 'scale(1)' },
+                    '50%': { opacity: 0.7, transform: 'scale(1.1)' },
+                  },
+                }} /> 
+                Today's Must-Try Specials
+            </Typography>
+            <Grid container spacing={2}>
+                {featuredItems.map((item, index) => (
+                    <Grid item xs={6} sm={4} md={3} key={item._id}>
+                        <Card 
+                          elevation={0}
+                          sx={{ 
+                            height: '100%', 
+                            display: 'flex', 
+                            flexDirection: 'column',
+                            borderRadius: 4,
+                            border: (theme) => `2px solid ${theme.palette.mode === 'light' ? 'rgba(241, 196, 15, 0.3)' : 'rgba(241, 196, 15, 0.2)'}`,
+                            overflow: 'hidden',
+                            transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+                            '&:hover': {
+                              transform: 'translateY(-8px) scale(1.02)',
+                              boxShadow: (theme) => theme.palette.mode === 'light'
+                                ? '0 12px 24px rgba(241, 196, 15, 0.25)'
+                                : '0 12px 24px rgba(241, 196, 15, 0.15)',
+                              borderColor: 'primary.main',
+                            },
+                            animation: `fadeInUp 0.6s ease-out ${index * 0.1}s both`,
+                            '@keyframes fadeInUp': {
+                              from: {
+                                opacity: 0,
+                                transform: 'translateY(20px)',
+                              },
+                              to: {
+                                opacity: 1,
+                                transform: 'translateY(0)',
+                              },
+                            },
+                          }}
+                        >
+                            <CardContent sx={{ p: 2, pb: '16px !important', textAlign: 'center' }}>
+                                <Avatar 
+                                    variant="rounded" 
+                                    src={item.imageUrl || '/images/placeholder-food.jpg'} 
+                                    sx={{ 
+                                      width: 80, 
+                                      height: 80, 
+                                      mx: 'auto', 
+                                      mb: 1.5,
+                                      borderRadius: 3,
+                                      boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
+                                      transition: 'transform 0.3s ease',
+                                      '&:hover': {
+                                        transform: 'scale(1.1) rotate(5deg)',
+                                      },
+                                    }}
+                                    alt={item.name}
+                                    onError={(e) => { e.target.src = '/images/placeholder-food.jpg'; }}
+                                />
+                                <Typography variant="body1" sx={{ fontWeight: 600, mb: 0.5 }}>{item.name}</Typography>
+                                <Typography variant="body2" color="text.secondary" sx={{ fontWeight: 500 }}>Only ₹{item.price}</Typography>
+                            </CardContent>
+                            <Box sx={{ p: 1.5, textAlign: 'center', borderTop: (theme) => `1px solid ${theme.palette.divider}` }}>
+                                <Button 
+                                    size="small" 
+                                    variant="contained" 
+                                    color="primary" 
+                                    onClick={() => handleOpenCustomization(item)} 
+                                    startIcon={<AddIcon />}
+                                    sx={{
+                                      borderRadius: 2,
+                                      textTransform: 'none',
+                                      fontWeight: 600,
+                                    }}
+                                >
+                                    {item.modifiers && item.modifiers.length > 0 ? 'Customize' : 'Add to Order'}
+                                </Button>
+                            </Box>
+                        </Card>
+                    </Grid>
+                ))}
+            </Grid>
+          </Box>
+      )}
+
+
+      <Grid container spacing={3}>
+        {/* --- LEFT COLUMN: MENU --- */}
+        <Grid size={{ xs: 12, md: 7 }}>
+          <Paper sx={{ p: 1.5, mb: 2 }}>
+            <Stack direction={{ xs: 'column', sm: 'row' }} spacing={1.5}>
+              <TextField
+                label="Search Menu..."
+                variant="outlined"
+                size="small"
+                fullWidth
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)} 
+                InputProps={{
+                  startAdornment: <SearchIcon color="action" sx={{ mr: 0.5, fontSize: '1.1rem' }} />
+                }}
+                sx={{ '& .MuiInputBase-root': { fontSize: '0.875rem' } }}
+              />
+            </Stack>
+            <Tabs
+              value={selectedCategory}
+              onChange={(e, newValue) => setSelectedCategory(newValue)}
+              variant="scrollable"
+              scrollButtons="auto"
+              allowScrollButtonsMobile
+              sx={{ mt: 1.5, minHeight: 'auto' }}
+            >
+              {categories.map((category) => (
+                <Tab key={category} label={category} value={category} sx={{ py: 1, fontSize: '0.875rem', minHeight: 'auto' }} />
+              ))}
+            </Tabs>
+          </Paper>
+
+          {loading ? (
+            <Box sx={{display: 'flex', justifyContent: 'center', p: 4}}><CircularProgress /></Box>
+          ) : Object.keys(menuByCategories).length === 0 ? (
+            <Typography sx={{ p: 3, textAlign: 'center', fontStyle: 'italic' }}>
+              No items match your search. Try another category!
+            </Typography>
+          ) : (
+            <Stack spacing={2.5}>
+             {Object.keys(menuByCategories).map(category => (
+                <Box key={category}>
+                  <Typography variant="h5" component="h2" gutterBottom sx={{ fontWeight: 'bold', borderBottom: 2, borderColor: 'primary.main', pb: 0.75, color: 'text.primary', fontSize: '1.35rem', mb: 1.5 }}>
+                    {category}
+                  </Typography>
+                  <Grid container spacing={2}>
+                    {menuByCategories[category].map((item, index) => (
+                      <Grid item key={item._id} xs={12} sm={6}>
+                        <Card sx={{ 
+                          display: 'flex', 
+                          height: '100%', 
+                          p: 1.5,
+                          borderRadius: 4,
+                          border: (theme) => `1px solid ${theme.palette.mode === 'light' ? 'rgba(0,0,0,0.08)' : 'rgba(255,255,255,0.08)'}`,
+                          boxShadow: (theme) => theme.palette.mode === 'light'
+                            ? '0 2px 8px rgba(0,0,0,0.08)'
+                            : '0 2px 8px rgba(0,0,0,0.3)',
+                          transition: 'all 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
+                          overflow: 'hidden',
+                          position: 'relative',
+                          '&::before': {
+                            content: '""',
+                            position: 'absolute',
+                            top: 0,
+                            left: 0,
+                            right: 0,
+                            height: '4px',
+                            background: (theme) => `linear-gradient(90deg, ${theme.palette.primary.main}, ${theme.palette.primary.dark})`,
+                            transform: 'scaleX(0)',
+                            transformOrigin: 'left',
+                            transition: 'transform 0.3s ease',
+                          },
+                          '&:hover': {
+                            transform: 'translateY(-4px)',
+                            boxShadow: (theme) => theme.palette.mode === 'light'
+                              ? '0 8px 24px rgba(241, 196, 15, 0.2)'
+                              : '0 8px 24px rgba(241, 196, 15, 0.15)',
+                            borderColor: 'primary.main',
+                            '&::before': {
+                              transform: 'scaleX(1)',
+                            },
+                          },
+                          animation: `fadeIn 0.5s ease-out ${index * 0.05}s both`,
+                          '@keyframes fadeIn': {
+                            from: { opacity: 0 },
+                            to: { opacity: 1 },
+                          },
+                        }}>
+                          <CardMedia
+                                      component="img"
+  sx={{ 
+    width: 90, 
+    height: 90, 
+    m: 1, 
+    borderRadius: 3, 
+    flexShrink: 0,
+    objectFit: 'cover',
+    transition: 'transform 0.3s ease',
+    '&:hover': {
+      transform: 'scale(1.05)',
+    },
+  }}
+  image={getImageUrl(item.imageUrl)} // ✅ This will handle both local and full URLs
+  alt={item.name}
+  onError={(e) => { 
+    console.log('❌ Image failed to load:', item.imageUrl);
+    // Use either a web placeholder or your local one:
+    e.target.src = getImageUrl('/images/placeholder-food.jpg'); // If you have this file
+    // OR
+    e.target.src = 'https://via.placeholder.com/90x90/FFD700/000000?text=No+Image';
+  }}
+/>
+  
+                          <Box sx={{ display: 'flex', flexDirection: 'column', flexGrow: 1, p: 1, pl: 0 }}>
+                            <CardContent sx={{ p: 0, flex: '1 0 auto', pb: 0.5 }}>
+                              <Typography variant="subtitle1" sx={{ lineHeight: 1.3, fontSize: '0.95rem', fontWeight: 600, mb: 0.5 }}>{item.name}</Typography>
+                              <Typography variant="body2" color="text.secondary" sx={{ fontWeight: 'bold', fontSize: '0.9rem', color: 'primary.main' }}>₹{item.price}</Typography>
+
+                               <Button 
+  variant="contained"
+  onClick={() => handleAddToCart(item)}
+  disabled={!item.inStock}  // ✅ Changed from !item.available to !item.inStock
+  sx={{
+    backgroundColor: '#FFD700',
+    color: '#000000',
+    fontWeight: 'bold',
+    '&:hover': {
+      backgroundColor: '#FFC400'
+    },
+    '&:disabled': {
+      backgroundColor: 'grey.400'
+    }
+  }}
+>
+  {item.inStock ? 'Add to Cart' : 'Out of Stock'}  {/* ✅ Changed from item.available to item.inStock */}
+</Button>                             
+                            </CardContent>
+                            <Box sx={{ mt: 0.5, alignSelf: 'flex-end' }}>
+                              <Button 
+                                variant="contained" 
+                                size="small"
+                                startIcon={<AddIcon sx={{ fontSize: '1rem' }} />} 
+                                onClick={() => handleOpenCustomization(item)}
+                                sx={{ 
+                                  fontSize: '0.75rem', 
+                                  px: 1.5, 
+                                  py: 0.5,
+                                  borderRadius: 2,
+                                  textTransform: 'none',
+                                  fontWeight: 600,
+                                  transition: 'all 0.2s ease',
+                                  '&:hover': {
+                                    transform: 'scale(1.05)',
+                                  },
+                                }}
+                              >
+                                {item.modifiers && item.modifiers.length > 0 ? 'Customize' : 'Add'}
+                              </Button> 
+                            </Box>
+                          </Box>
+                        </Card>
+                      </Grid>
+                    ))}
+                  </Grid>
+                </Box>
+             ))}
+            </Stack>
+          )}
+        </Grid>
+
+        {/* --- RIGHT COLUMN: CART --- */}
+        <Grid size={{ xs: 12, md: 5 }}>
+          <Card sx={{ 
+            position: 'sticky', 
+            top: 20,
+            borderRadius: 4,
+            border: (theme) => `2px solid ${theme.palette.mode === 'light' ? 'rgba(241, 196, 15, 0.2)' : 'rgba(241, 196, 15, 0.15)'}`,
+            boxShadow: (theme) => theme.palette.mode === 'light'
+              ? '0 4px 16px rgba(0,0,0,0.1)'
+              : '0 4px 16px rgba(0,0,0,0.3)',
+            background: (theme) => theme.palette.mode === 'light'
+              ? 'linear-gradient(145deg, #ffffff 0%, #fafafa 100%)'
+              : 'linear-gradient(145deg, #1a1a1a 0%, #2a2a2a 100%)',
+            transition: 'all 0.3s ease',
+            '&:hover': {
+              boxShadow: (theme) => theme.palette.mode === 'light'
+                ? '0 8px 24px rgba(241, 196, 15, 0.2)'
+                : '0 8px 24px rgba(241, 196, 15, 0.15)',
+              borderColor: 'primary.main',
+            },
+          }}>
+            <CardContent sx={{ p: 2.5, '&:last-child': { pb: 2.5 } }}>
+              <Typography 
+                variant="h5" 
+                gutterBottom 
+                sx={{ 
+                  fontSize: '1.25rem', 
+                  fontWeight: 600, 
+                  mb: 2,
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 1,
+                  background: (theme) => theme.palette.mode === 'light'
+                    ? 'linear-gradient(135deg, #F1C40F 0%, #F39C12 100%)'
+                    : 'linear-gradient(135deg, #F1C40F 0%, #D4AC0D 100%)',
+                  WebkitBackgroundClip: 'text',
+                  WebkitTextFillColor: 'transparent',
+                  backgroundClip: 'text',
+                }}
+              >
+                🛒 Your Order
+              </Typography>
+              {cart.length === 0 ? ( <Typography variant="body2" sx={{ mb: 2 }}>Your cart is empty.</Typography> ) : (
+                <Box>
+                  <List sx={{ py: 0 }}>
+                    {cart.map((item, index) => (
+                      <ListItem 
+                        key={item.cartId || item._id} 
+                        divider 
+                        sx={{ 
+                          py: 1.5, 
+                          px: 1, 
+                          flexWrap: 'wrap',
+                          borderRadius: 2,
+                          mb: 1,
+                          transition: 'all 0.2s ease',
+                          '&:hover': {
+                            backgroundColor: (theme) => theme.palette.mode === 'light' 
+                              ? 'rgba(241, 196, 15, 0.05)' 
+                              : 'rgba(241, 196, 15, 0.08)',
+                            transform: 'translateX(4px)',
+                          },
+                          animation: `slideInRight 0.3s ease-out ${index * 0.05}s both`,
+                          '@keyframes slideInRight': {
+                            from: {
+                              opacity: 0,
+                              transform: 'translateX(-20px)',
+                            },
+                            to: {
+                              opacity: 1,
+                              transform: 'translateX(0)',
+                            },
+                          },
+                        }} 
+                      >
+                        {/* --- TOP ROW: NAME, QTY, DELETE --- */}
+                        <Box display="flex" justifyContent="space-between" alignItems="center" width="100%">
+                          <ListItemText 
+                            primary={<Typography variant="body2" sx={{ fontWeight: 500 }}>{item.name}</Typography>}
+                            secondary={<Typography variant="caption">{item.customization ? `₹${item.price.toFixed(2)} (Customized)` : `₹${item.price} each`}</Typography>} 
+                            sx={{ m: 0 }} 
+                          />
+                          <Box sx={{ display: 'flex', alignItems: 'center', ml: 'auto', gap: 0.5 }}>
+                            <Button size="small" variant="outlined" onClick={() => handleQuantityChange(item.cartId || item._id, -1)} sx={{ minWidth: '28px', height: '28px', padding: 0, fontSize: '1rem' }} aria-label="decrease quantity">-</Button>
+                            <Typography variant="body2" sx={{ px: 1, minWidth: '24px', textAlign: 'center', fontWeight: 500 }} aria-label="quantity">{item.quantity}</Typography>
+                            <Button size="small" variant="outlined" onClick={() => handleQuantityChange(item.cartId || item._id, 1)} sx={{ minWidth: '28px', height: '28px', padding: 0, fontSize: '1rem' }} aria-label="increase quantity">+</Button>
+                            <IconButton edge="end" aria-label="delete" onClick={() => handleRemoveItem(item.cartId || item._id)} size="small" sx={{ ml: 0.5, p: 0.5}}> 
+                              <DeleteIcon sx={{ fontSize: '1rem' }} /> 
+                            </IconButton>
+                          </Box>
+                        </Box>
+                        
+                        {/* --- MIDDLE ROW: CUSTOMIZATION SUMMARY --- */}
+                        {item.customization && item.customization.length > 0 && (
+                            <Typography variant="caption" sx={{ width: '100%', pt: 0.25, color: 'text.secondary', fontStyle: 'italic', fontSize: '0.7rem' }}>
+                              {getCustomizationSummary(item)}
+                            </Typography>
+                        )}
+                        
+                        {/* --- BOTTOM ROW: NOTE --- */}
+                        <Box display="flex" width="100%" sx={{ pt: 0.25 }}>
+                          <Button 
+                            variant="text" 
+                            size="small" 
+                            startIcon={<EditNoteIcon sx={{ fontSize: '0.875rem' }} />}
+                            onClick={() => openNoteModal(item)}
+                            sx={{ textTransform: 'none', p: 0, minHeight: 'auto', fontSize: '0.75rem' }}
+                          >
+                            {item.note ? 'Edit Note' : 'Add Note'}
+                          </Button>
+                          {item.note && (
+                            <Typography variant="caption" sx={{ pl: 0.5, fontStyle: 'italic', color: 'text.secondary', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap', fontSize: '0.7rem' }}>
+                              "{item.note}"
+                            </Typography>
+                          )}
+                        </Box>
+                      </ListItem>
+                    ))}
+                  </List>
+                  <Typography variant="h6" sx={{ mt: 1.5, fontWeight: 600 }}> Total: ₹{getTotalPrice()} </Typography>
+                </Box>
+              )}
+              {/* --- Conditional Checkout UI --- */}
+              <Box sx={{ mt: 2 }}>
+                {customerToken ? (
+                  <Button onClick={handleSubmitOrder} variant="contained" color="success" size="medium" fullWidth disabled={cart.length === 0} sx={{ py: 1.5 }}>
+                    Proceed to Checkout
+                  </Button>
+                ) : (
+                  <Box textAlign="center">
+                    <Alert severity="info" sx={{ mb: 1.5, fontSize: '0.875rem', py: 0.75 }}>Please log in or register to place an order.</Alert>
+                    <Button component={RouterLink} to="/customer/login" state={{ from: 'checkout' }} variant="contained" color="primary" size="medium" sx={{ mr: 1, mb: 1, py: 1 }}>Login to Order</Button>
+                    <Button component={RouterLink} to="/customer/register" variant="outlined" color="primary" size="medium" sx={{ mb: 1, py: 1 }}>Register</Button>
+                  </Box>
+                )}
+              </Box>
+            </CardContent>
+          </Card>
+        </Grid>
+      </Grid>
+
+      {/* --- NOTE EDITING MODAL --- */}
+      <Dialog open={noteModalOpen} onClose={closeNoteModal} fullWidth maxWidth="xs">
+        <DialogTitle>Add Note for {currentItemForNote?.name}</DialogTitle>
+        <DialogContent>
+          <TextField
+            autoFocus margin="dense"
+            label="Special Instructions (e.g., extra spicy)"
+            type="text" fullWidth variant="outlined"
+            multiline rows={3}
+            value={currentNoteText}
+            onChange={(e) => setCurrentNoteText(e.target.value)}
+          />
+        </DialogContent>
+        <DialogActions>
+          <Button onClick={closeNoteModal}>Cancel</Button>
+          <Button onClick={handleSaveNote} variant="contained">Save Note</Button>
+        </DialogActions>
+      </Dialog>
+      
+      {/* --- CUSTOMIZATION MODAL RENDER --- */}
+      <CustomizeModal 
+        item={itemToCustomize}
+        open={customizationModalOpen}
+        onClose={() => setCustomizationModalOpen(false)}
+        onCustomize={handleItemCustomized}
+      />
+      
+      {/* --- ADDRESS MODAL RENDER --- */}
+      <AddressModal
+        open={isAddressModalOpen}
+        onClose={() => setIsAddressModalOpen(false)}
+        onSubmitOrder={handleFinalizeOrder}
+        customerToken={customerToken}
+        showSnackbar={showSnackbar}
+      />
+
+    </Container>
+  );
+}
+
+export default CustomerApp;
+
+
+
+
+
+
+
